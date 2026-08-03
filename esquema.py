@@ -193,3 +193,44 @@ def aplicar(conn: sqlite3.Connection) -> None:
         _migrar_2(conn)
     conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES ('esquema', ?)",
                  (str(VERSAO),))
+
+
+# Sobrevivem ao apagamento geral. `config` é preferência, não registro — apagá-la
+# só faria o usuário reconfigurar tema e senha de PDF. `series` é dado público do
+# Banco Central, em cache: apagá-la não protege nada e obriga a baixar tudo de
+# novo para a curva voltar a ser calculável.
+PRESERVADAS = ("config", "series")
+
+
+def limpar(conn: sqlite3.Connection,
+           preservar: tuple[str, ...] = PRESERVADAS) -> dict[str, int]:
+    """Apaga o conteúdo do cofre e devolve quantas linhas saíram de cada tabela.
+
+    A senha mestra, a chave de recuperação e o próprio arquivo continuam os
+    mesmos: isto esvazia o banco, não recria o cofre.
+
+    As tabelas vêm do `sqlite_master`, nunca de uma lista escrita à mão — uma
+    lista fica para trás quando alguém acrescenta uma tabela, e o resultado
+    silencioso seria um "apagou tudo" que não apagou tudo."""
+    tabelas = [r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+        " AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+    apagados: dict[str, int] = {}
+    # sem isto a ordem do apagamento importaria, e ela viria da mesma lista à mão
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        for tabela in tabelas:
+            if tabela in preservar:
+                continue
+            linhas = conn.execute(f"SELECT count(*) FROM {tabela}").fetchone()[0]
+            conn.execute(f"DELETE FROM {tabela}")
+            if linhas:
+                apagados[tabela] = linhas
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+    # DELETE só marca a página como livre: os bytes apagados continuariam dentro
+    # do banco, e o banco inteiro vai cifrado para o arquivo. Sem o VACUUM, quem
+    # tem a senha ainda leria o que o usuário mandou apagar.
+    conn.commit()                            # VACUUM não roda dentro de transação
+    conn.execute("VACUUM")
+    return apagados

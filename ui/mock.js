@@ -47,14 +47,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.4.2', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.5.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.4.2' })
+        ? ok({ config, versao: '0.5.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.4.2' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.5.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -129,6 +129,10 @@
         anos: ['2026'],
       }),
       pagar: () => ok({ id: 1 }),
+      resetar: frase => (String(frase).trim().toUpperCase() === 'APAGAR TUDO'
+        ? ok({ apagados: { ativos: 3, lancamentos: 41 }, total: 44,
+               backup: 'C:\mock\peculium.pec.antes-do-reset-20260803-181500' })
+        : erro('digite "APAGAR TUDO" para confirmar')),
 
       relatorios_disponiveis: () => ok([
         { chave: 'posicao', titulo: 'Posição consolidada' },

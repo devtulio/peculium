@@ -224,6 +224,43 @@ test.describe('impostos', () => {
   });
 });
 
+test.describe('apagar todos os dados', () => {
+  async function abrirZonaDeRisco(page) {
+    await destrancar(page);
+    await page.click('#menu button[data-view="config"]');
+    await page.click('#btn-reset');
+    await expect(page.locator('#modal')).toBeVisible();
+  }
+
+  test('a frase errada não apaga nada', async ({ page }) => {
+    await abrirZonaDeRisco(page);
+    await page.fill('#r-frase', 'apagar');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('APAGAR TUDO');
+    // o diálogo de sucesso não aparece: nada foi apagado
+    await expect(page.locator('#modal-titulo')).not.toHaveText('Cofre esvaziado');
+  });
+
+  test('confirmada, informa o que saiu e onde está a cópia', async ({ page }) => {
+    await abrirZonaDeRisco(page);
+    await page.fill('#r-frase', 'apagar tudo');       // caixa não importa
+    await page.click('#modal-ok');
+    await expect(page.locator('#modal-titulo')).toHaveText('Cofre esvaziado');
+    await expect(page.locator('#modal-corpo')).toContainText('44 registro(s)');
+    await expect(page.locator('#modal-corpo')).toContainText('antes-do-reset');
+    await page.click('#modal-ok');
+    await expect(page.locator('#titulo-view')).toHaveText('Painel');
+  });
+
+  test('a tela avisa o que sobrevive antes de qualquer clique', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="config"]');
+    const zona = page.locator('.zona-risco');
+    await expect(zona).toContainText('não mudam');
+    await expect(zona).toContainText('cópia do cofre é guardada antes');
+  });
+});
+
 test.describe('configurações', () => {
   test('trocar o tema repinta a interface', async ({ page }) => {
     await destrancar(page);

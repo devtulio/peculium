@@ -3,6 +3,27 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.5.0] — 2026-08-03
+
+### Adicionado — apagar todos os dados
+
+Em **Configurações › Zona de risco**. Apaga lançamentos, ativos, instituições,
+importações, notas, cotações, títulos de renda fixa, pagamentos de DARF e o
+histórico de auditoria.
+
+- **A confirmação é uma frase digitada** (`APAGAR TUDO`), não um botão: uma
+  operação sem desfazer não pode ficar a um clique de distância de um acidente.
+- **Uma cópia do cofre é guardada antes**, com a data no nome e **fora do
+  rodízio** dos três backups automáticos — eles giram a cada gravação, e três
+  lançamentos depois do reset nenhum deles teria mais o dado antigo. É a única
+  volta atrás que existe, e abre com a senha do momento em que foi tirada.
+- **O dado sai do arquivo, não só das consultas.** `DELETE` deixa os bytes numa
+  página livre e o banco inteiro vai cifrado para o disco: sem `VACUUM`, quem
+  tem a senha ainda leria o que foi mandado apagar.
+- Sobrevivem só as **preferências** (tema, CPF, senhas de PDF) e as **séries do
+  Banco Central**, que são dado público em cache. **Senha mestra e chave de
+  recuperação não mudam** — o cofre é o mesmo, vazio.
+
 ## [0.4.2] — 2026-08-03
 
 ### Corrigido — "Atualizar cotações" acusava falha onde não havia

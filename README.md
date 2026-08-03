@@ -117,6 +117,11 @@ Quem furta o computador não passa do arquivo cifrado; não há porta de rede, e
 não há o que atacar pela rede local; e como o arquivo já é o cofre, guardá-lo em
 nuvem não expõe nada além do tamanho e da data.
 
+Há um **apagamento geral** em Configurações, confirmado por frase digitada. Ele
+guarda uma cópia do cofre antes, fora do rodízio dos backups automáticos, e roda
+`VACUUM`: sem isso o `DELETE` deixaria os bytes apagados dentro do arquivo
+cifrado, legíveis por quem tem a senha.
+
 O que ele **não** protege está dito com a mesma clareza no
 [modelo de ameaça](DESIGN.md#2-modelo-de-ameaça) — a começar por programa
 malicioso rodando na sua conta com o Peculium aberto.

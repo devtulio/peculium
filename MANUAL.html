@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.4.2</title>
+<title>Manual Operacional — Peculium v0.5.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.4.2 — Manual Operacional";
+    @top-center { content: "Peculium v0.5.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.4.2</div>
+  <div class="versao">VERSÃO 0.5.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.4.2.exe" --verificar</pre>
+<pre>"Peculium v0.5.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -504,6 +504,37 @@ lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.
   porque ela vazou, apague os backups antigos; do contrário eles seguem abrindo
   com a senha comprometida. A chave de recuperação continua valendo.
 </div>
+
+<h3>Apagar todos os dados</h3>
+
+<p>Em <strong>Configurações › Zona de risco</strong>. Apaga lançamentos, ativos,
+instituições, importações, notas, cotações, títulos de renda fixa, pagamentos de
+DARF e o histórico de auditoria — tudo que você registrou ou importou.</p>
+
+<p>Ficam de fora suas <strong>preferências</strong> (tema, CPF, senhas de PDF) e
+as <strong>séries do Banco Central</strong>, que são dado público em cache:
+apagá-las não protege nada e obrigaria a baixar tudo de novo para a curva voltar
+a ser calculável.</p>
+
+<p>A <strong>senha mestra e a chave de recuperação não mudam.</strong> Isto
+esvazia o cofre; não cria outro.</p>
+
+<div class="aviso">
+  <strong>Não tem desfazer dentro do programa.</strong> A volta atrás é a cópia
+  que o próprio reset guarda antes de apagar, com a data no nome
+  (<code>peculium.pec.antes-do-reset-20260803-181500</code>). Ela fica
+  <strong>fora do rodízio</strong> dos três backups automáticos — que giram a
+  cada gravação, e três lançamentos depois do reset já não teriam mais o dado
+  antigo. Ela abre com a senha do momento em que foi tirada.
+</div>
+
+<p>Por isso a confirmação é uma <strong>frase digitada</strong>, não um botão:
+<code>APAGAR TUDO</code>. Um botão atrás de um “OK” fica a um clique de distância
+de um acidente sem volta.</p>
+
+<p>Para recuperar, feche o programa, renomeie a cópia para
+<code>peculium.pec</code> (guardando o vazio antes, por via das dúvidas) e abra
+de novo.</p>
 
 <h2 id="faq">11. Perguntas frequentes</h2>
 

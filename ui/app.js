@@ -867,6 +867,20 @@ async function verConfig() {
           cad.instituicoes.map(i => [esc(i.nome), esc(i.cnpj || '—')]),
           { vazio: 'Nenhuma instituição cadastrada' })}</div>
       </div>
+    </div>
+
+    <div class="bloco zona-risco" style="margin-top:1rem"><h3>Zona de risco</h3>
+      <p>Apaga <strong>todos os registros</strong>: lançamentos, ativos,
+        instituições, importações, notas, cotações, títulos de renda fixa,
+        pagamentos de DARF e o histórico de auditoria.</p>
+      <p class="trava-nota">Ficam de fora só suas preferências (tema, CPF, senhas
+        de PDF) e as séries do Banco Central, que são dado público em cache. A
+        senha mestra e a chave de recuperação <strong>não mudam</strong> — o
+        cofre é o mesmo, vazio.</p>
+      <p class="trava-nota">Uma cópia do cofre é guardada antes, com a data no
+        nome e fora do rodízio dos três backups automáticos. Ela abre com a senha
+        de agora.</p>
+      <button type="button" class="perigo" id="btn-reset">Apagar todos os dados…</button>
     </div>`;
 
   const salvar = async () => {
@@ -887,6 +901,24 @@ async function verConfig() {
     $('#s-atual').value = $('#s-nova').value = '';
     modal('Senha trocada', `<p>${esc(r.aviso)}</p>`, async () => {}, 'Entendi');
   });
+
+  $('#btn-reset').addEventListener('click', () => modal('Apagar todos os dados', `
+    <p>Isto <strong>não tem desfazer</strong> dentro do programa. A volta atrás é
+      abrir a cópia que será guardada agora.</p>
+    <p class="trava-nota">Para confirmar, digite <code>APAGAR TUDO</code> abaixo.
+      Um botão só não basta para uma operação sem volta.</p>
+    <div class="campo"><label for="r-frase">Confirmação</label>
+      <input id="r-frase" autocomplete="off" placeholder="APAGAR TUDO"></div>`,
+    async dlg => {
+      const r = await tentar(() => api('resetar', $('#r-frase', dlg).value));
+      ESTADO.cadastros = null;
+      modal('Cofre esvaziado', `
+        <p>${r.total} registro(s) apagado(s) em ${Object.keys(r.apagados).length}
+          tabela(s).</p>
+        <p class="trava-nota">Cópia de antes guardada em:<br>
+          <code>${esc(r.backup)}</code></p>`,
+        async () => { irPara('painel'); }, 'Entendi');
+    }, 'Apagar tudo'));
 
   $('#btn-ativo').addEventListener('click', () => modal('Novo ativo', `
     <div class="form-grade">

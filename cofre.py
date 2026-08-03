@@ -202,6 +202,22 @@ class Cofre:
         corpo = AESGCM(self._dek).encrypt(nonce, self._conn.serialize(), None)
         _gravar_atomico(self.caminho, _montar(self._header, nonce, corpo))
 
+    def instantaneo(self, etiqueta: str) -> Path:
+        """Cópia nomeada do cofre, **fora do rodízio de backups**.
+
+        Os três backups rotativos não servem antes de uma operação destrutiva:
+        eles giram a cada gravação, e três commits depois de um apagamento todos
+        já carregam o cofre vazio. Esta cópia não gira e não é apagada por
+        ninguém — é o que torna o reset reversível.
+
+        Abre com a **senha do momento em que foi tirada**: leva o embrulho da DEK
+        junto, então uma troca de senha posterior não a alcança."""
+        self.commit()                       # o arquivo passa a ser o estado atual
+        destino = self.caminho.with_suffix(
+            f"{self.caminho.suffix}.{etiqueta}-{datetime.now():%Y%m%d-%H%M%S}")
+        destino.write_bytes(self.caminho.read_bytes())
+        return destino
+
     def trocar_senha(self, atual: str, nova: str) -> None:
         """A DEK não muda: só o embrulho dela é refeito.
 

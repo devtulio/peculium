@@ -122,8 +122,33 @@ Trancar a tela **fecha o cofre no processo**, não só recarrega o HTML — sen�
 chave continuaria na memória e a abertura seguinte esbarraria na trava que ele
 mesmo segura.
 
-Rotação: os **3 dumps anteriores** ficam como `peculium.1.pec` … `.3.pec`. Também
+Rotação: os **3 dumps anteriores** ficam como `peculium.pec.1` … `.pec.3`. Também
 cifrados — backup é cópia de arquivo, sem rotina própria.
+
+### 3.4 Apagar todos os dados
+
+Operação destrutiva, exposta em Configurações › Zona de risco. Três decisões que
+a governam:
+
+**A confirmação é uma frase digitada** (`APAGAR TUDO`), não um botão. Um botão
+atrás de um "OK" fica a um clique de um acidente que não tem desfazer.
+
+**A cópia de antes fica fora do rodízio.** Os três backups automáticos giram a
+cada gravação — três lançamentos depois do apagamento, nenhum deles teria mais o
+dado antigo. `Cofre.instantaneo()` grava uma cópia com a data no nome que
+ninguém rotaciona; ela é a única volta atrás que existe, e abre com a senha do
+momento em que foi tirada.
+
+**`VACUUM` não é limpeza, é apagamento.** `DELETE` marca a página como livre e
+deixa os bytes onde estavam; como o banco inteiro é serializado e cifrado a cada
+gravação, sem o `VACUUM` o dado apagado continuaria dentro do arquivo —
+recuperável por quem tem a senha, que é exatamente de quem o usuário quis apagar.
+
+A lista de tabelas vem do `sqlite_master`, nunca escrita à mão: uma lista fica
+desatualizada assim que alguém acrescenta uma tabela, e o resultado silencioso
+seria um "apagou tudo" que não apagou tudo. Sobrevivem só `config` (preferência,
+não registro) e `series` (dado público do BCB em cache). Senha mestra e chave de
+recuperação não mudam: isto esvazia o cofre, não recria.
 
 ## 4. Esquema SQLite
 

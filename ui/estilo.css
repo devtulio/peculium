@@ -54,6 +54,13 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .link { background:none; border:0; color:var(--destaque); text-decoration:underline;
         padding:.3rem; }
 :root[data-tema="aerarium"] .link { color:var(--destaque); }
+.perigo {
+  background:var(--superficie); color:var(--erro); border:1px solid var(--erro);
+  border-radius:6px; padding:.45rem .9rem; font-weight:600;
+}
+.zona-risco { border-color:var(--erro); }
+.zona-risco h3 { color:var(--erro); }
+
 .erro { color:var(--erro); font-size:.88rem; }
 
 /* wordmark ------------------------------------------------------------- */

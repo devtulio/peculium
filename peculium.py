@@ -31,7 +31,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.4.2"
+VERSAO = "0.5.0"
 
 
 def raiz() -> Path:
@@ -152,6 +152,34 @@ class Api:
         return {"aviso": "Os backups anteriores continuam abrindo com a senha "
                          "antiga: eles guardam o embrulho velho da mesma chave. "
                          "Se você trocou a senha porque ela vazou, apague-os."}
+
+    # A frase é digitada, não clicada: um botão de apagar tudo atrás de um "OK"
+    # é um clique de distância de um acidente que não tem desfazer.
+    CONFIRMACAO_RESET = "APAGAR TUDO"
+
+    @_resposta
+    @_exige_cofre
+    def resetar(self, confirmacao: str) -> dict:
+        """Esvazia o cofre — lançamentos, ativos, importações, notas, tudo.
+
+        Guarda uma cópia **antes**, fora do rodízio de backups: os três backups
+        automáticos giram a cada gravação, então três lançamentos depois do reset
+        nenhum deles teria mais o dado antigo. A cópia abre com a senha atual.
+
+        A senha mestra e a chave de recuperação não mudam: o cofre é o mesmo,
+        vazio."""
+        if str(confirmacao or "").strip().upper() != self.CONFIRMACAO_RESET:
+            raise ValueError(f'digite "{self.CONFIRMACAO_RESET}" para confirmar')
+        copia = self._aberto.instantaneo("antes-do-reset")
+        apagados = esquema.limpar(self._conn)
+        total = sum(apagados.values())
+        # a auditoria também foi apagada; esta vira a primeira linha da nova
+        lancamentos.auditar(self._conn, "RESET",
+                            f"cofre esvaziado: {total} registro(s) em "
+                            f"{len(apagados)} tabela(s); cópia em {copia.name}")
+        self._gravar()
+        self._conferencias.clear()
+        return {"apagados": apagados, "total": total, "backup": str(copia)}
 
     def _resumo_inicial(self) -> dict:
         return {"config": self._config(), "versao": VERSAO,
