@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-63234c)](https://www.python.org/)
 [![Plataforma](https://img.shields.io/badge/plataforma-Windows-63234c)](#instala%C3%A7%C3%A3o)
 [![Release](https://img.shields.io/github/v/release/devtulio/peculium?display_name=tag&color=63234c)](https://github.com/devtulio/peculium/releases)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21767164-63234c)](https://doi.org/10.5281/zenodo.21767164)
 
 Gerenciador de investimentos pessoais. Programa **desktop**, monousuário, com o
 acervo inteiro num arquivo cifrado por senha mestra.

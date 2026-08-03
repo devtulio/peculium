@@ -3,7 +3,7 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
-## [0.1.0] — 2026-08-03
+## [0.1.0] — 2026-08-03 — [DOI 10.5281/zenodo.21767165](https://doi.org/10.5281/zenodo.21767165)
 
 Primeira versão. Núcleo completo e interface funcionando; renda fixa e Tesouro
 ficam para a 1.1.
