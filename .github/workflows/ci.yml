@@ -70,8 +70,16 @@ jobs:
         shell: pwsh
         run: |
           $exe = Get-ChildItem dist -Filter "*.exe" | Select-Object -First 1
-          & $exe.FullName --verificar
-          if ($LASTEXITCODE -ne 0) { throw "o executável não passou na verificação" }
+          # O binário é de subsistema gráfico: o operador de chamada NÃO espera
+          # por ele e $LASTEXITCODE viria de outro comando. E, sem console, o
+          # laudo só existe no arquivo que o próprio programa grava.
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList "--verificar" `
+                             -Wait -PassThru
+          $laudo = Join-Path $exe.DirectoryName "peculium-verificacao.txt"
+          if (Test-Path $laudo) { Get-Content $laudo } else { Write-Host "sem laudo" }
+          if ($p.ExitCode -ne 0) {
+            throw "o executável não passou na verificação (código $($p.ExitCode))"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: Peculium-exe

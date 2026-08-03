@@ -532,7 +532,12 @@ def verificar() -> int:
         backend = "webview indisponível"
     laudo = (f"Peculium {VERSAO}\nraiz: {raiz()}\n{backend}\n"
              + ("ÍNTEGRO\n" if not faltando else "FALTANDO: " + ", ".join(faltando)))
-    print(laudo)
+    # Build sem console não tem stdout: `print` levanta AttributeError em vez de
+    # imprimir, e derrubaria justamente a verificação que deveria tranquilizar.
+    try:
+        print(laudo)
+    except Exception:                                        # noqa: BLE001
+        pass
     try:
         (Path(sys.executable).parent / "peculium-verificacao.txt").write_text(
             laudo, encoding="utf-8")
