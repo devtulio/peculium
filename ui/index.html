@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Peculium</title>
+<link rel="stylesheet" href="estilo.css">
+<script>
+  // O tema chega pela URL e é aplicado ANTES de pintar: lido do banco cifrado
+  // ele só existiria depois da senha, e a tela de trava piscaria branca.
+  document.documentElement.dataset.tema =
+    new URLSearchParams(location.search).get('tema') || 'atrium';
+</script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════ tela de trava ═══════════ -->
+<section id="trava" class="trava">
+  <div class="trava-cartao">
+    <svg class="marca" viewBox="0 0 64 64" aria-hidden="true">
+      <rect x="4" y="12" width="27" height="40" rx="2" fill="#63234c"/>
+      <rect x="33" y="12" width="27" height="40" rx="2" fill="#63234c"/>
+      <rect x="7.5" y="15.5" width="20" height="33" fill="#332a1a"/>
+      <rect x="36.5" y="15.5" width="20" height="33" fill="#332a1a"/>
+      <g stroke="#e9e1d0" stroke-width="1.3" stroke-linecap="round">
+        <path d="M10 21h9"/><path d="M21.5 21h4.5"/><path d="M10 27h11"/>
+        <path d="M22.5 27h3.5"/><path d="M10 33h8"/><path d="M20.5 33h5.5"/>
+        <path d="M10 39h10"/><path d="M22 39h4"/><path d="M39 21h9"/>
+        <path d="M50.5 21h4.5"/><path d="M39 27h7"/><path d="M49 27h6"/>
+        <path d="M39 33h10"/><path d="M51 33h4"/>
+      </g>
+      <g stroke="#b08d3e" stroke-width="1.1" stroke-linecap="round" opacity=".9">
+        <path d="M10 45h16"/><path d="M39 39h16"/></g>
+      <rect x="31" y="12" width="2" height="40" fill="#4a1a3a"/>
+      <g fill="none" stroke="#b08d3e" stroke-width="1.8">
+        <path d="M31 21a2.6 2.6 0 0 0 2 0"/><path d="M31 32a2.6 2.6 0 0 0 2 0"/>
+        <path d="M31 43a2.6 2.6 0 0 0 2 0"/></g>
+      <g transform="rotate(24 50 34)">
+        <rect x="48.6" y="8" width="2.8" height="26" rx="1.2" fill="#9aa3ab"/>
+        <path d="M48.6 34 50 39l1.4-5Z" fill="#6f7880"/>
+        <path d="M47.6 8h4.8l-.9-4.4h-3Z" fill="#6f7880"/></g>
+    </svg>
+    <h1 class="wordmark">PEC<span>V</span>LI<span>V</span>M</h1>
+    <p class="divisa">SVVM · CVIQVE</p>
+
+    <form id="form-abrir" class="trava-form" hidden>
+      <label for="senha">Senha mestra</label>
+      <input type="password" id="senha" autocomplete="current-password" required>
+      <button class="primario" type="submit">Abrir cofre</button>
+      <button type="button" class="link" id="btn-recuperar">Usar chave de recuperação</button>
+    </form>
+
+    <form id="form-criar" class="trava-form" hidden>
+      <p class="trava-nota">Este computador ainda não tem um cofre. A senha mestra
+        é a única forma de abri-lo — <strong>não há como recuperá-la</strong> sem a
+        chave que será mostrada a seguir.</p>
+      <label for="senha-nova">Senha mestra (mínimo 8 caracteres)</label>
+      <input type="password" id="senha-nova" autocomplete="new-password" required>
+      <label for="senha-conf">Repita a senha</label>
+      <input type="password" id="senha-conf" autocomplete="new-password" required>
+      <button class="primario" type="submit">Criar cofre</button>
+    </form>
+
+    <form id="form-recuperar" class="trava-form" hidden>
+      <label for="chave">Chave de recuperação</label>
+      <input type="text" id="chave" placeholder="XXXX-XXXX-XXXX-…" required>
+      <button class="primario" type="submit">Abrir com a chave</button>
+      <button type="button" class="link" id="btn-voltar-senha">Voltar para a senha</button>
+    </form>
+
+    <div id="chave-nova" class="chave-nova" hidden>
+      <h2>Guarde a chave de recuperação</h2>
+      <p>Ela abre o cofre se você esquecer a senha. É mostrada <strong>uma única
+        vez</strong>: imprima ou copie para fora deste computador.</p>
+      <code id="chave-valor"></code>
+      <button type="button" class="primario" id="btn-chave-ok">
+        Guardei a chave — abrir o cofre</button>
+    </div>
+
+    <p id="trava-erro" class="erro" role="alert" hidden></p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════ aplicação ═══════════════ -->
+<div id="app" class="app" hidden>
+  <nav class="lateral" aria-label="Seções">
+    <div class="selo" aria-hidden="true">
+      <svg viewBox="0 0 64 64">
+        <rect x="11" y="8" width="42" height="44" rx="2.5" fill="#63234c" stroke="#8d3f72"/>
+        <rect x="15" y="12" width="34" height="36" rx="1" fill="#533036"/>
+        <rect x="12" y="51.4" width="40" height="2.4" rx=".9" fill="#4e1b3d"/>
+        <rect x="13" y="54.2" width="38" height="2.4" rx=".9" fill="#8d3f72"/>
+        <rect x="11" y="27.5" width="42" height="4" fill="#cfc4aa"/>
+        <circle cx="32" cy="29.5" r="9" fill="#4a1a3a" stroke="#b08d3e" stroke-width="1.4"/>
+        <text x="32" y="35" text-anchor="middle" font-family="Georgia,serif"
+              font-weight="bold" font-size="12" fill="#e9e1d0">P</text>
+      </svg>
+      <span class="wordmark pequeno">PEC<span>V</span>LI<span>V</span>M</span>
+    </div>
+    <ul id="menu"></ul>
+    <div class="lateral-rodape">
+      <span id="versao"></span>
+      <button type="button" class="link" id="btn-trancar">Trancar</button>
+    </div>
+  </nav>
+
+  <main id="conteudo">
+    <header class="topo">
+      <h2 id="titulo-view">Painel</h2>
+      <div id="acoes-view" class="acoes"></div>
+    </header>
+    <div id="view" class="view" aria-live="polite"></div>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<dialog id="modal">
+  <form method="dialog" id="modal-form">
+    <h3 id="modal-titulo"></h3>
+    <div id="modal-corpo"></div>
+    <menu>
+      <button value="cancelar" class="link" type="submit">Cancelar</button>
+      <button value="ok" class="primario" id="modal-ok" type="submit">Confirmar</button>
+    </menu>
+  </form>
+</dialog>
+
+<script>
+  // ?mock=1 carrega uma ponte falsa: é como a interface é verificada fora do
+  // pywebview, sem precisar de cofre nem de dado real.
+  if (new URLSearchParams(location.search).has('mock'))
+    document.write('<scr' + 'ipt src="mock.js"><\/scr' + 'ipt>');
+</script>
+<script src="app.js"></script>
+</body>
+</html>
