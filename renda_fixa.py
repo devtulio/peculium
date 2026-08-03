@@ -137,6 +137,13 @@ def pu(conn, ativo_id: int, data: str | None = None) -> float:
     t = titulo(conn, ativo_id)
     if t is None:
         raise ValueError(f"ativo {ativo_id} não é um título de renda fixa")
+    if t.taxa <= 0:
+        # a posição da B3 traz emissor, indexador e datas, mas NÃO a taxa. Sem
+        # ela a curva sairia plana e, pior, sobrescreveria o preço oficial que a
+        # própria B3 informou. Melhor não ter curva do que ter uma errada.
+        raise series.SerieIndisponivel(
+            f"{t.ticker}: a taxa do título não foi informada — complete o "
+            f"cadastro ou importe a nota de renda fixa")
     data = data or date.today().isoformat()
     # depois do vencimento o papel para de render: o valor congela no vencimento
     limite = min(data, t.vencimento) if t.vencimento else data

@@ -22,6 +22,7 @@ import fisco
 import importar_b3
 import importar_nota
 import importar_nota_rf
+import importar_posicao
 import lancamentos
 import obrigacoes
 import razao
@@ -30,7 +31,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.3.2"
+VERSAO = "0.4.0"
 
 
 def raiz() -> Path:
@@ -460,6 +461,25 @@ class Api:
                                "quantidade": i.negocio.quantidade,
                                "preco": i.negocio.preco,
                                "custos": i.negocio.custos} for i in conferencia.itens]}
+        if alvo.suffix.lower() == ".xlsx":
+            # Posição e consolidado têm abas próprias; qualquer outro xlsx cai no
+            # leitor de movimentação. Distinguir importa muito: o de posição é
+            # retrato e NÃO pode virar lançamento.
+            try:
+                conferencia = importar_posicao.conferir(
+                    self._conn, importar_posicao.ler(alvo))
+            except importar_posicao.ArquivoNaoReconhecido:
+                pass
+            else:
+                self._conferencias[token] = ("POSICAO", conferencia)
+                return {
+                    "token": token, "origem": "POSICAO",
+                    "data": textos.data_br(conferencia.data),
+                    "avisos": conferencia.avisos,
+                    "confere": conferencia.confere,
+                    "itens": [vars(i) for i in conferencia.itens],
+                    "divergencias": [vars(d) for d in conferencia.divergencias],
+                }
         conferencia = importar_b3.ler(alvo, self._conn)
         self._conferencias[token] = ("B3", conferencia)
         return {"token": token, "origem": "B3", "relatorio": conferencia.relatorio,
@@ -478,7 +498,10 @@ class Api:
     def confirmar_importacao(self, token: str, tickers: dict | None = None,
                              classes: dict | None = None) -> dict:
         origem, conferencia = self._conferencias.pop(token)
-        if origem == "NOTA_RF":
+        if origem == "POSICAO":
+            resumo = importar_posicao.gravar(self._conn, conferencia)
+            resumo["avisos"] = conferencia.avisos
+        elif origem == "NOTA_RF":
             resumo = importar_nota_rf.gravar(self._conn, conferencia)
         elif origem == "NOTA":
             resumo = importar_nota.gravar(self._conn, conferencia, tickers, classes)

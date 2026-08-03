@@ -3,6 +3,35 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] — 2026-08-03
+
+### Adicionado — conferência contra a B3
+
+- **Leitor do relatório de Posição** (`importar_posicao.py`), que também lê os
+  consolidados anual e mensal. Ele **nunca cria lançamento**: retrato traz
+  quantidade e valor de mercado, não o custo de aquisição, e inventá-lo
+  corromperia o preço médio e, atrás dele, o imposto. O que faz:
+  - **confere** a carteira calculada contra a da B3, papel a papel, **na data do
+    retrato** — auditoria independente do sistema inteiro;
+  - **grava os preços oficiais do dia** sem precisar de rede, inclusive o do
+    **Tesouro IPCA+**, que não tem outro jeito de ser precificado porque a curva
+    dele não se reconstrói sem o VNA oficial;
+  - **completa o cadastro de renda fixa** com emissor, indexador e datas.
+- **Instruções na tela de importação** dizendo quais dos seis relatórios da B3
+  baixar, e por quê. Proventos Recebidos e o consolidado mensal ficam de fora: o
+  primeiro repete a Movimentação, o segundo é o mesmo retrato em outra data.
+- **Precedência de origem nas cotações**: o preço digitado à mão vence sempre;
+  entre os automáticos, o oficial da B3 vence a curva calculada. Sem essa ordem,
+  recalcular curvas apagava o preço bom com um estimado.
+
+### Corrigido
+
+- **Título sem taxa não inventa mais curva.** A posição da B3 não informa a taxa;
+  com taxa zero a curva saía plana e sobrescrevia o preço oficial. `renda_fixa.pu()`
+  agora recusa calcular e diz o que falta.
+- **Preço unitário na tela ganhou casas decimais.** Os CDBs são emitidos a
+  R$ 0,01 e, com duas casas, a coluna de PU inteira virava `0,01`.
+
 ## [0.3.2] — 2026-08-03
 
 ### Corrigido — a planilha da B3 não importava

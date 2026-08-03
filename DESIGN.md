@@ -360,6 +360,53 @@ Dois invariantes barram a nota que não fecha: `quantidade × PU = valor bruto` 
   identifica, o ticker é derivado de nome e vencimento e a conferência marca
   **derivado**.
 
+## 6.4 Posição da B3 (`importar_posicao.py`) — retrato, não extrato
+
+A B3 exporta seis relatórios. Três interessam, e por motivos diferentes:
+
+| Relatório | O que é | Uso |
+|---|---|---|
+| Negociação | toda compra e venda | **cria lançamento** |
+| Movimentação | proventos, bonificação, aplicação e resgate de RF | **cria lançamento** |
+| Posição | fotografia de um instante | **nunca cria lançamento** |
+| Consolidado anual/mensal | a mesma fotografia, em outra data | mesmo leitor |
+| Proventos Recebidos | subconjunto da Movimentação | não é importado |
+
+**A regra que sustenta o módulo: retrato não vira lançamento.** O relatório de
+posição traz quantidade e valor de mercado, mas **não traz o custo de aquisição**.
+Criar posição a partir dele inventaria o preço médio e, atrás dele, o imposto —
+um erro que não aparece na tela e reaparece na declaração. O que falta de compra
+ou venda o usuário lança; o programa não adivinha.
+
+Sobrando isso, o retrato serve para três coisas:
+
+1. **Conferência.** Compara a carteira calculada com a da B3, papel a papel, **na
+   data do retrato** — não hoje, senão um consolidado antigo divergiria de tudo
+   que foi comprado depois dele. É auditoria independente do sistema inteiro: na
+   carteira real apontou exatamente os três lançamentos que faltavam.
+2. **Cotações oficiais, sem rede.** Fechamento na renda variável, preço na curva
+   na renda fixa e valor atualizado no Tesouro — que é o **único** jeito de
+   precificar o Tesouro IPCA+, cuja curva não se reconstrói sem o VNA oficial.
+3. **Cadastro de renda fixa.** Emissor, indexador, emissão e vencimento vêm
+   prontos.
+
+**Armadilhas medidas nos relatórios reais**, cada uma com teste:
+
+- O Tesouro **não tem código de negociação**. Sem um ticker estável, cada
+  importação criaria outro ativo para o mesmo papel; ele é derivado do par
+  indexador/vencimento (`TESOURO-IPCA-JUROS-2037`).
+- A quantidade vem em formato **americano**, e o Tesouro é o único papel
+  fracionado: ler `1.500` como milhar multiplicaria a posição por mil.
+- O preço do retrato é o de **hoje**, nunca o PU de emissão. Usá-lo como base de
+  um CDB emitido a R$ 1,00 e valendo R$ 1,0295 levantaria a curva inteira 3%; o
+  PU vem da aplicação lançada, ou de R$ 1,00 por convenção.
+- A B3 deixa o **indexador em branco** em boa parte dos CDBs. Sem ele o título
+  não é cadastrado, e a tela diz por quê — o preço dela já entrou, então a
+  posição continua certa.
+- A posição **não traz a taxa**. Um título com taxa zero geraria curva plana e —
+  pior — sobrescreveria o preço oficial da própria B3; `renda_fixa.pu()` recusa
+  calcular, e `cotacoes.PRIORIDADE` põe MANUAL acima de B3, e B3 acima de CURVA.
+
 ## 7. Rede (`cotacoes.py`) — opcional e contida
 
 Desligada por padrão. Quando ligada:

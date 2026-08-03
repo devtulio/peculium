@@ -6,6 +6,7 @@ renda fixa) precisam da mesma conversão — e um bug aqui é um bug de dinheiro
 from __future__ import annotations
 
 import re
+import unicodedata
 from datetime import datetime
 
 _MILHAR = re.compile(r"^-?\d{1,3}(\.\d{3})+$")
@@ -14,6 +15,17 @@ _MILHAR = re.compile(r"^-?\d{1,3}(\.\d{3})+$")
 BR = "BR"
 US = "US"
 AUTO = "AUTO"
+
+
+def chave(texto: str) -> str:
+    """Nome de coluna ou de aba sem acento, caixa nem espaço duplo.
+
+    Os cabeçalhos da B3 mudam sem aviso e variam entre relatórios: casar por
+    nome normalizado sobrevive a acento e maiúscula, e falha alto quando a
+    coluna some de verdade."""
+    sem_acento = "".join(c for c in unicodedata.normalize("NFD", str(texto or ""))
+                         if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
 def formato_numerico(amostras) -> str:

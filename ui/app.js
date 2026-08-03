@@ -8,6 +8,10 @@ const $$ = (sel, raiz = document) => [...raiz.querySelectorAll(sel)];
 const brl = v => (Number(v) || 0).toLocaleString('pt-BR',
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qtd = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 8 });
+/* Preço unitário tem casas que preço de tela não tem: os CDBs são emitidos a
+   R$ 0,01 e, com duas casas, a coluna inteira virava "0,01". */
+const pu = v => (Number(v) || 0).toLocaleString('pt-BR',
+  { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 
 /* Alta e baixa nunca só por cor: sinal, seta e valor sempre juntos. */
 function sinal(v) {
@@ -280,7 +284,7 @@ function blocoRendaFixa(rf) {
         celulas: [esc(p.ticker), esc(p.emissor || '—'), esc(p.indexador),
                   esc(p.vencimento ? p.vencimento.split('-').reverse().join('/') : '—'),
                   qtd(p.quantidade), brl(p.custo),
-                  p.pu == null ? '—' : brl(p.pu), brl(p.bruto),
+                  p.pu == null ? '—' : pu(p.pu), brl(p.bruto),
                   sinal(p.rendimento)],
       })), { numericas: [4, 5, 6, 7, 8] })}
     <ul class="aviso-lista">
@@ -473,9 +477,30 @@ async function verImportar() {
   $('#view').innerHTML = `
     <div class="bloco">
       <h3>Importar arquivo</h3>
-      <p>Aceita os relatórios de <strong>Negociação</strong> e
-        <strong>Movimentação</strong> da Área do Investidor da B3 (CSV ou XLSX) e
-        a <strong>nota de corretagem</strong> em PDF.</p>
+      <p>O Peculium reconhece o arquivo sozinho — escolha e ele sabe o que fazer.
+        Estes são os que valem a pena baixar, na ordem:</p>
+      <ol class="guia-importar">
+        <li><strong>Negociação</strong> — B3, Extratos › Negociação (XLSX ou CSV).<br>
+          Toda compra e venda. <em>É o que forma a carteira.</em></li>
+        <li><strong>Movimentação</strong> — B3, Extratos › Movimentação (XLSX ou CSV).<br>
+          Dividendos, JCP, rendimento de FII, bonificação, aplicação e resgate de
+          renda fixa. <em>É o que forma o caixa.</em></li>
+        <li><strong>Nota de corretagem</strong> — no site da corretora (PDF).<br>
+          Só a nota traz corretagem, emolumentos e taxas.
+          <em>Sem ela o custo fica menor do que foi, e o imposto maior.</em></li>
+        <li><strong>Posição</strong> — B3, Extratos › Posição (XLSX).<br>
+          Confere a sua carteira contra a da B3 e traz os preços oficiais do dia
+          — inclusive o do Tesouro IPCA+, que não tem outro jeito de precificar.
+          <em>Não cria lançamento nenhum.</em></li>
+      </ol>
+      <p class="trava-nota"><strong>Baixe Negociação e Movimentação pelo período
+        mais longo que a B3 deixar.</strong> Compra que ficou de fora não some da
+        conta: ela reaparece na Posição como divergência, e sem o custo de
+        aquisição o preço médio e o imposto saem errados.</p>
+      <p class="trava-nota"><strong>Proventos Recebidos</strong> e o
+        <strong>consolidado mensal</strong> não precisam ser importados: o
+        primeiro repete o que já vem na Movimentação, e o segundo é o mesmo
+        retrato da Posição em outra data.</p>
       <p class="trava-nota">Nada é gravado antes da sua conferência. O arquivo
         original não é guardado — ele traz CPF.</p>
       <button type="button" class="primario" id="btn-escolher">Escolher arquivo…</button>
@@ -485,7 +510,59 @@ async function verImportar() {
     const caminho = await tentar(() => api('escolher_arquivo'));
     if (!caminho) return;
     const c = await tentar(() => api('importar', caminho));
-    ({ NOTA: conferirNota, NOTA_RF: conferirNotaRF, B3: conferirB3 })[c.origem](c);
+    ({ NOTA: conferirNota, NOTA_RF: conferirNotaRF, B3: conferirB3,
+       POSICAO: conferirPosicao })[c.origem](c);
+  });
+}
+
+const SITUACOES = {
+  CONFERE: ['confere', 'ok'],
+  SO_NA_B3: ['só na B3', 'grave'],
+  SO_NO_PECULIUM: ['só aqui', 'grave'],
+  QUANTIDADE_DIFERE: ['quantidade difere', 'grave'],
+};
+
+function conferirPosicao(c) {
+  const problemas = c.divergencias.filter(d => d.situacao !== 'CONFERE');
+  $('#conferencia').innerHTML = `
+    <div class="bloco" style="margin-top:1rem">
+      <h3>Posição da B3 em ${esc(c.data)}</h3>
+      <div class="cartoes">
+        ${cartao('Papéis na B3', c.itens.length)}
+        ${cartao('Conferem', c.confere)}
+        ${cartao('A resolver', problemas.length)}
+      </div>
+      <p class="trava-nota">Retrato não vira lançamento: ele traz quantidade e
+        valor de mercado, nunca o custo de aquisição. Gravar cria os
+        <strong>preços do dia</strong> e completa o cadastro de renda fixa — o
+        que faltar de compra ou venda você lança à mão.</p>
+      ${listaAvisos(c.avisos)}
+      ${problemas.length
+        ? `<h3>Divergências</h3>
+           ${tabela(['Ativo', 'Situação', 'No Peculium', 'Na B3', 'O que fazer'],
+             problemas.map(d => [
+               esc(d.ticker),
+               `<span class="selo-situacao ${SITUACOES[d.situacao][1]}">${SITUACOES[d.situacao][0]}</span>`,
+               qtd(d.no_peculium), qtd(d.na_b3), esc(d.observacao)]),
+             { numericas: [2, 3] })}`
+        : '<p class="trava-nota">Nenhuma divergência: a carteira calculada bate '
+          + 'com a da B3, papel por papel.</p>'}
+      <h3>Preços do dia</h3>
+      ${tabela(['Ativo', 'Classe', 'Quantidade', 'Preço', 'Valor', 'Instituição'],
+        c.itens.map(i => [esc(i.ticker), esc(i.classe), qtd(i.quantidade),
+          i.preco == null ? '—' : pu(i.preco),
+          i.valor == null ? '—' : brl(i.valor), esc(i.instituicao)]),
+        { numericas: [2, 3, 4] })}
+      <menu style="display:flex;gap:.6rem;justify-content:flex-end;padding:0">
+        <button type="button" class="primario" id="btn-gravar-posicao">
+          Gravar preços e cadastro</button>
+      </menu>
+    </div>`;
+  $('#btn-gravar-posicao').addEventListener('click', async () => {
+    const r = await tentar(() => api('confirmar_importacao', c.token));
+    toast(`${r.cotacoes} cotação(ões), ${r.ativos_novos} ativo(s) e `
+        + `${r.titulos} título(s) — nenhum lançamento`);
+    irPara('carteira');
   });
 }
 

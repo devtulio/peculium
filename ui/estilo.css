@@ -75,6 +75,10 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 .trava-form { display:grid; gap:.5rem; text-align:left; }
 .trava-form label { font-size:.82rem; color:var(--suave); }
 .trava-form .primario { margin-top:.6rem; }
+.guia-importar { margin:.4rem 0 .8rem; padding-left:1.2rem; display:grid; gap:.5rem;
+  font-size:.9rem; line-height:1.45; }
+.guia-importar em { color:var(--suave); font-style:normal; }
+
 .trava-nota { font-size:.84rem; color:var(--suave); text-align:left; margin:0 0 .4rem; }
 .chave-nova { text-align:left; }
 .chave-nova h2 { font-size:1.05rem; margin-bottom:.4rem; }

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.3.2</title>
+<title>Manual Operacional — Peculium v0.4.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.3.2 — Manual Operacional";
+    @top-center { content: "Peculium v0.4.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.3.2</div>
+  <div class="versao">VERSÃO 0.4.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.3.2.exe" --verificar</pre>
+<pre>"Peculium v0.4.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -293,6 +293,38 @@ de IR traz o total do ano no rodapé.</p>
 <p>Nada é gravado antes da sua conferência, e o arquivo original nunca é guardado:
 ele traz CPF.</p>
 
+<h3>Quais arquivos importar</h3>
+
+<p>A Área do Investidor da B3 exporta seis relatórios. Estes são os que valem a
+pena, e a própria tela de importação repete a lista:</p>
+
+<table>
+  <thead><tr><th>Arquivo</th><th>Onde</th><th>Para quê</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Negociação</strong></td><td>B3, Extratos › Negociação</td>
+      <td>toda compra e venda — é o que forma a carteira</td></tr>
+    <tr><td><strong>Movimentação</strong></td><td>B3, Extratos › Movimentação</td>
+      <td>dividendos, JCP, rendimentos, bonificação, renda fixa — é o que forma
+        o caixa</td></tr>
+    <tr><td><strong>Nota de corretagem</strong></td><td>site da corretora (PDF)</td>
+      <td>corretagem, emolumentos e taxas — só a nota tem</td></tr>
+    <tr><td><strong>Posição</strong></td><td>B3, Extratos › Posição</td>
+      <td>confere a carteira e traz os preços oficiais do dia</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Proventos Recebidos</strong> e o <strong>consolidado mensal</strong> não
+precisam ser importados: o primeiro repete o que já vem na Movimentação, e o
+segundo é o mesmo retrato da Posição em outra data. O consolidado
+<strong>anual</strong> funciona, e serve para conferir uma data de 31/12.</p>
+
+<div class="aviso">
+  <strong>Baixe Negociação e Movimentação pelo período mais longo que a B3
+  deixar.</strong> Compra que ficou de fora não some da conta: ela reaparece na
+  Posição como divergência, e sem o custo de aquisição o preço médio e o imposto
+  saem errados.
+</div>
+
 <h3>Relatórios da B3</h3>
 <p>Na Área do Investidor, exporte <strong>Negociação</strong> (compras e vendas) e
 <strong>Movimentação</strong> (proventos e eventos), em CSV ou XLSX.</p>
@@ -354,6 +386,40 @@ aplicação lançada de uma vez, com o preço unitário certo.</p>
   <strong>derivado</strong> na conferência. Você pode renomear depois em
   Cadastros.
 </div>
+
+<h3>Posição da B3 — conferir sem lançar</h3>
+
+<p>O relatório de Posição é uma <strong>fotografia de um instante</strong>, e o
+programa o trata como tal: ele <strong>não cria lançamento nenhum</strong>.</p>
+
+<div class="aviso">
+  <strong>Retrato não tem custo de aquisição.</strong> A B3 informa quanto você
+  tem e quanto vale hoje, não quanto você pagou. Se o programa criasse posição a
+  partir disso, estaria inventando o preço médio — e o preço médio é o que decide
+  o imposto. O que faltar de compra ou venda, você lança.
+</div>
+
+<p>Importar a Posição faz três coisas:</p>
+
+<ol>
+  <li><strong>Confere a sua carteira contra a da B3</strong>, papel a papel, na
+    data do retrato. Cada divergência diz o que fazer: <em>só na B3</em> (falta
+    lançar a compra), <em>só aqui</em> (falta lançar a venda ou a transferência),
+    <em>quantidade difere</em> (falta um lançamento, ou algum entrou dobrado).</li>
+  <li><strong>Grava os preços oficiais do dia</strong>, sem precisar de internet —
+    inclusive o do <strong>Tesouro IPCA+</strong>, que não tem outro jeito de ser
+    precificado, porque a curva dele não se reconstrói sem o VNA oficial.</li>
+  <li><strong>Completa o cadastro de renda fixa</strong>: emissor, indexador,
+    emissão e vencimento vêm prontos.</li>
+</ol>
+
+<p>Um preço que você digitou à mão nunca é sobrescrito. Entre os automáticos, o
+da B3 vence a curva calculada pelo programa — ele é o oficial.</p>
+
+<p>A B3 deixa o indexador em branco em boa parte dos CDBs. Quando isso acontece o
+título não é cadastrado e a tela diz por quê; o preço dela já entrou, então a
+posição continua certa. Para ter a curva, importe a nota de renda fixa ou
+cadastre o título à mão.</p>
 
 <h2 id="impostos">8. Imposto de renda e contas a pagar</h2>
 

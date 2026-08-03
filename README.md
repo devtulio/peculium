@@ -33,6 +33,11 @@ emolumentos, e sem eles o preço médio nasce errado — e o imposto atrás dele
   reescrevem o preço médio para trás.
 - **Importação da B3** — relatórios de Negociação e Movimentação (CSV e XLSX),
   idempotentes: reimportar períodos que se sobrepõem é o caso normal.
+- **Conferência contra a B3** — o relatório de Posição é lido como retrato, e
+  **nunca vira lançamento**: ele não traz o custo de aquisição, e inventá-lo
+  corromperia o preço médio. Ele aponta o que falta lançar, grava os preços
+  oficiais do dia sem precisar de rede — inclusive o do Tesouro IPCA+, que não
+  tem outro jeito de ser precificado — e completa o cadastro de renda fixa.
 - **Notas de corretagem** — leitura do PDF no layout Sinacor, com rateio dos
   custos e reconciliação com o que já veio da bolsa, sem duplicar negócio. Para
   **renda fixa** há um leitor por corretora (XP e Inter), porque cada uma inventa
@@ -134,6 +139,7 @@ protege o dado é o cofre.
 | `importar_b3.py` | Relatórios da B3 |
 | `importar_nota.py` | Nota de corretagem em PDF (Sinacor) |
 | `importar_nota_rf.py` | Nota de renda fixa: um adaptador por corretora |
+| `importar_posicao.py` | Posição da B3: confere e precifica, sem lançar |
 | `renda_fixa.py` | Título como ativo com PU: curva, posição e IR regressivo |
 | `series.py` | Séries do Banco Central, base da curva |
 | `cotacoes.py` | Cotação de fechamento, opcional |

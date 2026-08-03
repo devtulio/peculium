@@ -26,6 +26,11 @@ TICKER = re.compile(r"^[A-Z]{4}\d{1,2}$")
 MANUAL = "MANUAL"
 ONLINE = "ONLINE"
 
+# Quem pode sobrescrever quem. O preço digitado à mão vence sempre; depois vem o
+# oficial da B3, que é melhor que a curva que o programa calcula — sem esta
+# ordem, recalcular curvas apagaria o preço bom com um estimado.
+PRIORIDADE = {MANUAL: 3, "B3": 2, "CURVA": 1, ONLINE: 1}
+
 
 @dataclass
 class Resultado:
@@ -45,7 +50,7 @@ def registrar(conn, ativo_id: int, data: str, fechamento: float,
     """Grava a cotação. Devolve False quando respeitou um preço manual existente."""
     atual = conn.execute("SELECT origem FROM cotacoes WHERE ativo_id=? AND data=?",
                          (ativo_id, data)).fetchone()
-    if atual and atual[0] == MANUAL and origem != MANUAL:
+    if atual and PRIORIDADE.get(atual[0], 1) > PRIORIDADE.get(origem, 1):
         return False
     conn.execute("INSERT OR REPLACE INTO cotacoes (ativo_id, data, fechamento, origem)"
                  " VALUES (?,?,?,?)", (ativo_id, data, fechamento, origem))

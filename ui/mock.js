@@ -47,14 +47,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.3.2', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.4.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.3.2' })
+        ? ok({ config, versao: '0.4.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.3.2' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.4.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -137,9 +137,35 @@
       relatorio: () => ok(RELATORIO),
       salvar_relatorio: () => ok({ salvo: true, caminho: 'C:\\mock\\relatorio.html' }),
 
-      // ?rf=1 faz a importação devolver uma nota de renda fixa
+      // ?rf=1 devolve nota de renda fixa; ?posicao=1 devolve retrato da B3
       escolher_arquivo: () => ok('C:\\mock\\nota.pdf'),
-      importar: () => (new URLSearchParams(location.search).has('rf') ? ok({
+      importar: () => (new URLSearchParams(location.search).has('posicao') ? ok({
+        token: 'imp1', origem: 'POSICAO', data: '03/08/2026', confere: 1,
+        avisos: ['CDB123ABC: a B3 não informou o indexador, então o título não '
+               + 'foi cadastrado. O preço dela foi gravado e a posição fica correta.'],
+        itens: [
+          { ticker: 'PETR4', nome: 'PETROBRAS PN', classe: 'ACAO', quantidade: 100,
+            preco: 38.5, valor: 3850, instituicao: 'CORRETORA FICTÍCIA' },
+          { ticker: 'MXRF11', nome: 'FII MAXI REN', classe: 'FII', quantidade: 100,
+            preco: 9.58, valor: 958, instituicao: 'CORRETORA FICTÍCIA' },
+          { ticker: 'TESOURO-IPCA-JUROS-2037', nome: 'Tesouro IPCA+ 2037',
+            classe: 'TESOURO', quantidade: 0.5, preco: 4120.36, valor: 2060.18,
+            instituicao: 'CORRETORA FICTÍCIA' },
+          { ticker: 'CDB123ABC', nome: 'CDB BANCO ALFA', classe: 'RF',
+            quantidade: 50000, preco: 0.0100421, valor: 502.11,
+            instituicao: 'CORRETORA FICTÍCIA' }],
+        divergencias: [
+          { ticker: 'PETR4', situacao: 'CONFERE', no_peculium: 100, na_b3: 100,
+            classe: 'ACAO', observacao: '' },
+          { ticker: 'MXRF11', situacao: 'QUANTIDADE_DIFERE', no_peculium: 20,
+            na_b3: 100, classe: 'FII',
+            observacao: 'a quantidade não bate: falta lançamento, ou algum entrou dobrado' },
+          { ticker: 'TESOURO-IPCA-JUROS-2037', situacao: 'SO_NA_B3',
+            no_peculium: 0, na_b3: 0.5, classe: 'TESOURO',
+            observacao: 'a B3 tem e o Peculium não — falta o lançamento de compra' },
+          { ticker: 'VALE3', situacao: 'SO_NO_PECULIUM', no_peculium: 10, na_b3: 0,
+            classe: '', observacao: 'está na sua carteira e não na da B3 nesta data' }],
+      }) : new URLSearchParams(location.search).has('rf') ? ok({
         token: 'imp1', origem: 'NOTA_RF',
         avisos: ['CDB-CREDITO-2029-07-01: a nota não trouxe um código utilizável.'],
         notas: [
@@ -170,7 +196,9 @@
             sentido: 'COMPRA', quantidade: 100, preco: 9.71, custos: 2.2 }],
       })),
       confirmar_importacao: () =>
-        (new URLSearchParams(location.search).has('rf')
+        (new URLSearchParams(location.search).has('posicao')
+          ? ok({ ativos_novos: 2, cotacoes: 4, titulos: 0, avisos: [] })
+          : new URLSearchParams(location.search).has('rf')
           ? ok({ lancamentos: 2, titulos: 2, ja_importadas: 0 })
           : ok({ criados: 2, enriquecidos: 0 })),
     },

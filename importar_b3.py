@@ -21,7 +21,6 @@ from __future__ import annotations
 import csv
 import hashlib
 import re
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -127,16 +126,7 @@ class Conferencia:
 
 # --------------------------------------------------------------------- leitura crua
 
-def _chave(texto: str) -> str:
-    """Nome de coluna sem acento, caixa nem espaço duplo.
-
-    O cabeçalho da B3 muda sem aviso; casar por nome normalizado sobrevive a
-    acento e maiúscula, e falha alto quando a coluna some de verdade."""
-    sem_acento = "".join(c for c in unicodedata.normalize("NFD", texto)
-                         if unicodedata.category(c) != "Mn")
-    return re.sub(r"\s+", " ", sem_acento).strip().lower()
-
-
+_chave = textos.chave
 _numero = textos.numero
 _data = textos.data_iso
 

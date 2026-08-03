@@ -169,6 +169,41 @@ test.describe('nota de renda fixa', () => {
   });
 });
 
+test.describe('posição da B3', () => {
+  test('a tela de importar diz quais arquivos baixar', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="importar"]');
+    const guia = page.locator('.guia-importar li');
+    await expect(guia).toHaveCount(4);
+    await expect(guia.nth(3)).toContainText('Posição');
+    await expect(guia.nth(3)).toContainText('Não cria lançamento nenhum');
+    await expect(page.locator('#view')).toContainText('Proventos Recebidos');
+  });
+
+  test('conferência mostra as divergências e grava sem criar lançamento',
+    async ({ page }) => {
+      await page.goto('/index.html?mock=1&posicao=1&tema=atrium');
+      await page.fill('#senha', 'mock');
+      await page.click('#form-abrir button[type="submit"]');
+      await page.click('#menu button[data-view="importar"]');
+      await page.click('#btn-escolher');
+
+      await expect(page.locator('#conferencia')).toContainText('Posição da B3 em 03/08/2026');
+      // as três formas de divergir aparecem; o que confere fica fora da tabela
+      await expect(page.locator('#conferencia')).toContainText('quantidade difere');
+      await expect(page.locator('#conferencia')).toContainText('só na B3');
+      await expect(page.locator('#conferencia')).toContainText('só aqui');
+      await expect(page.locator('#conferencia'))
+        .toContainText('Retrato não vira lançamento');
+
+      // PU de CDB é da ordem de R$ 0,01: com duas casas a coluna vira "0,01"
+      await expect(page.locator('#conferencia')).toContainText('0,010042');
+
+      await page.click('#btn-gravar-posicao');
+      await expect(page.locator('#toast')).toContainText('nenhum lançamento');
+    });
+});
+
 test.describe('impostos', () => {
   test('DARF vencido aparece com multa e oferta de pagamento', async ({ page }) => {
     await destrancar(page);
