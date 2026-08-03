@@ -225,7 +225,10 @@ def test_migracao_do_esquema_antigo():
     esquema.aplicar(c)
     colunas = {x[1] for x in c.execute("PRAGMA table_info(rf_titulos)")}
     assert "ativo_id" in colunas and "lancamento_id" not in colunas
-    assert esquema.versao_do_banco(c) == 2
+    # o cofre antigo sai na versão corrente, não na que introduziu a migração
+    assert esquema.versao_do_banco(c) == esquema.VERSAO
+    # a tabela que veio depois é criada no mesmo passo, sem migração própria
+    assert c.execute("SELECT count(*) FROM posicao_b3").fetchone()[0] == 0
 
 
 def test_migracao_recusa_descartar_dado():

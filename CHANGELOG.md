@@ -3,6 +3,35 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.8.0] — 2026-08-03
+
+### Mudado — painel redesenhado
+
+Nova estrutura: **régua de quatro somas** no topo (patrimônio, custo, resultado,
+proventos, cada uma com sua nota de contexto), **composição da carteira em barra
+empilhada**, **dois gráficos** — proventos mês a mês e aportes acumulados — e a
+**tabela completa de posições**, não só as maiores.
+
+- **A divergência com a B3 agora aparece no painel**, com data do retrato,
+  quantos papéis conferem e quanto a B3 informa a mais. Para isso o retrato
+  importado passou a ser guardado; a comparação é **refeita a cada abertura**,
+  então lançar a compra que faltava apaga o aviso sozinho.
+- **A média de proventos divide pelos meses que tiveram provento**, não por doze:
+  dividir pelo ano em agosto diria metade do que se recebe por mês.
+- **A classe aparece por extenso** — "Fundos imobiliários" no lugar de `FII`,
+  "Ações" no lugar de `ACAO`. Código de banco não é rótulo de tela.
+- **O cifrão vem depois da seta** no resultado: `R$ ▲ +2,60` lê como duas frases.
+- Cores de série por tema: no escuro a púrpura não contrasta, e as três séries
+  precisam ser distinguíveis **entre si**, não só do fundo.
+
+**Tema continua não escolhendo layout.** Um painel, três temas — amarrar os dois
+faria trocar para o escuro à noite render uma estrutura diferente sem ter pedido.
+
+### Esquema
+
+- Versão 3: tabela `posicao_b3`, com o último retrato importado. Cofre antigo
+  ganha a tabela ao abrir, sem migração de dado.
+
 ## [0.7.1] — 2026-08-03
 
 ### Corrigido

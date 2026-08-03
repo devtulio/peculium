@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.7.1</title>
+<title>Manual Operacional — Peculium v0.8.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.7.1 — Manual Operacional";
+    @top-center { content: "Peculium v0.8.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.7.1</div>
+  <div class="versao">VERSÃO 0.8.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.7.1.exe" --verificar</pre>
+<pre>"Peculium v0.8.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -155,8 +155,22 @@ em treze grupos de quatro caracteres. Ela abre o mesmo cofre sem a senha.</p>
 
 <h2 id="painel">3. Painel</h2>
 
-<p>Resumo da carteira: patrimônio a mercado, custo de aquisição, resultado não
-realizado, proventos e aportes do ano, alocação por classe e maiores posições.</p>
+<p>O painel abre com uma <strong>régua de quatro somas</strong> — patrimônio a
+mercado, custo de aquisição, resultado não realizado e proventos do ano —, cada
+uma com a sua nota de contexto embaixo. Abaixo vêm a <strong>composição da
+carteira</strong> em barra empilhada, os gráficos de <strong>proventos mês a
+mês</strong> e <strong>aportes acumulados</strong>, e a <strong>tabela completa
+de posições</strong>.</p>
+
+<p>A média de proventos divide pelos meses <em>que tiveram</em> provento, não por
+doze: dividir pelo ano em agosto diria metade do que você recebe por mês.</p>
+
+<div class="aviso">
+  <strong>Se você já importou a Posição da B3, a divergência aparece aqui.</strong>
+  O painel diz a data do retrato, quantos papéis conferem e quanto a B3 informa a
+  mais, listando cada papel que falta lançar. A comparação é refeita toda vez que
+  o painel abre — lançar a compra que faltava apaga o aviso sozinho.
+</div>
 
 <p>No topo aparecem os <strong>alertas</strong>: DARF vencendo nos próximos quinze
 dias ou já vencido, ativos sem cotação e inconsistências detectadas no razão —

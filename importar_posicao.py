@@ -232,6 +232,23 @@ def ler(caminho: str | Path) -> Conferencia:
     return conf
 
 
+def ultima_conferencia(conn) -> Conferencia | None:
+    """Refaz a conferência do retrato mais recente já importado.
+
+    Recalcula, nunca lê um resultado guardado: se o usuário lançou a compra que
+    faltava, a divergência tem de sumir sozinha."""
+    linha = conn.execute("SELECT max(data) FROM posicao_b3").fetchone()
+    if linha is None or linha[0] is None:
+        return None
+    data = linha[0]
+    conf = Conferencia("posição da B3", data, itens=[
+        Item(r["ticker"], "", r["classe"], r["quantidade"], None, r["valor"])
+        for r in conn.execute(
+            "SELECT ticker, classe, quantidade, valor FROM posicao_b3"
+            " WHERE data=? ORDER BY ticker", (data,))])
+    return conferir(conn, conf)
+
+
 # --------------------------------------------------------------------- conferência
 
 def conferir(conn, conf: Conferencia) -> Conferencia:
@@ -273,6 +290,16 @@ def gravar(conn, conf: Conferencia) -> dict:
     preço médio e contaminaria o imposto. O que falta, o usuário lança."""
     ativos = {str(r[0]).upper(): r[1] for r in conn.execute("SELECT ticker, id FROM ativos")}
     novos = cotadas = titulos = 0
+
+    # o retrato fica guardado para o painel poder acusar a divergência depois que
+    # a tela de importação fechou. Só o que a B3 disse; a comparação é refeita a
+    # cada abertura, senão lançar a compra que faltava não apagaria o aviso
+    conn.execute("DELETE FROM posicao_b3 WHERE data=?", (conf.data,))
+    conn.executemany(
+        "INSERT INTO posicao_b3 (data, ticker, classe, quantidade, valor)"
+        " VALUES (?,?,?,?,?)",
+        [(conf.data, i.ticker.upper(), i.classe, i.quantidade, i.valor)
+         for i in conf.itens])
 
     for item in conf.itens:
         ativo_id = ativos.get(item.ticker.upper())

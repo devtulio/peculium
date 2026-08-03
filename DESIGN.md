@@ -640,6 +640,35 @@ Relatórios · Configurações**.
 - Três peles por `data-theme` (Atrium, Cera, Aerarium), WCAG 2.1 AA, e a regra do
   §7 de `IDENTIDADE.md`: alta e baixa **nunca só por cor**.
 
+## 10.0 Painel: régua, composição e tabela
+
+Estrutura escolhida entre três desenhos, e a decisão que importa registrar é a
+que **não** foi tomada: **tema não escolhe layout.** Um só painel roda nos três
+temas. Amarrar os dois faria o usuário trocar para o escuro à noite e ganhar uma
+estrutura diferente sem ter pedido, e multiplicaria por três o que o teste de
+contraste precisa cobrir.
+
+O que o painel mostra, nessa ordem: **régua de quatro somas** (patrimônio, custo,
+resultado, proventos), **composição em barra empilhada** (com três ou quatro
+classes ela compara proporções melhor que a rosca, e é legível sem legenda
+separada), os **dois gráficos** de proventos e aportes, e a **tabela completa de
+posições** — não só as maiores.
+
+Duas regras de conteúdo:
+
+**A média de proventos divide pelos meses que tiveram provento**, nunca por doze.
+Dividir pelo ano em agosto diria metade do que o usuário recebe por mês.
+
+**A divergência com a B3 fica em destaque, não escondida.** Patrimônio que não
+bate com a corretora é o sintoma mais caro que este programa pode ter, e o painel
+o encara. Para isso o retrato importado passou a ser **guardado** (`posicao_b3`,
+esquema v3): só o que a B3 disse, nunca a conclusão — a comparação é refeita a
+cada abertura, senão lançar a compra que faltava não apagaria o aviso.
+
+**Cores de série (`--serie1..4`) são por tema.** No escuro a púrpura não
+contrasta, e as séries precisam ser distinguíveis **entre si**, não só do fundo:
+lá elas viram âmbar, rosa e azul.
+
 ## 10.1 Datas: guarda ISO, mostra BR
 
 O banco guarda **sempre** `AAAA-MM-DD` (e competência como `AAAA-MM`): ordenação,

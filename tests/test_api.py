@@ -196,3 +196,54 @@ def test_cnpj_da_importacao_ganha_mascara_na_leitura(api):
     api._conn.execute("INSERT INTO instituicoes (nome, cnpj) VALUES (?,?)",
                       ("XP INVESTIMENTOS", "02332886000104"))
     assert dados(api.cadastros())["instituicoes"][0]["cnpj"] == "02.332.886/0001-04"
+
+
+# ------------------------------------------------------------------- painel
+
+def test_media_de_proventos_divide_pelos_meses_que_tiveram(api):
+    """Dividir pelo ano em agosto diria metade do que o usuário recebe por mês."""
+    inst, ativo = _cofre_com_cadastros(api)
+    for data, valor in (("15/05/2026", 10.0), ("15/06/2026", 20.0)):
+        dados(api.lancar({"data": data, "tipo": "RENDIMENTO", "ativo": "PETR4",
+                          "instituicao": "Corretora Teste", "valor": valor}))
+    d = dados(api.painel())
+    assert d["proventos_ano"] == pytest.approx(30.0)
+    assert d["meses_com_provento"] == 2          # não 12, nem os meses corridos
+
+
+def test_painel_acusa_a_divergencia_da_ultima_posicao(api):
+    """O retrato fica guardado para o painel poder acusar depois que a tela de
+    importação fechou — e a conferência é REFEITA, não lida de um resultado."""
+    inst, ativo = _cofre_com_cadastros(api)
+    api._conn.execute(
+        "INSERT INTO posicao_b3 (data, ticker, classe, quantidade, valor)"
+        " VALUES ('2026-08-03','PETR4','ACAO',100,3850.0)")
+    d = dados(api.painel())
+    assert d["divergencia"]["data"] == "03/08/2026"
+    assert d["divergencia"]["a_mais"] == pytest.approx(3850.0)
+    assert [i["ticker"] for i in d["divergencia"]["itens"]] == ["PETR4"]
+
+    # lançar a compra que faltava apaga o aviso, sem tocar no retrato guardado
+    dados(api.lancar({"data": "05/01/2026", "tipo": "COMPRA", "ativo": "PETR4",
+                      "instituicao": "Corretora Teste", "quantidade": 100,
+                      "preco": 30.0}))
+    assert dados(api.painel())["divergencia"] is None
+
+
+def test_sem_retrato_importado_nao_ha_divergencia(api):
+    _cofre_com_cadastros(api)
+    assert dados(api.painel())["divergencia"] is None
+
+
+def test_series_dos_graficos_do_painel(api):
+    inst, ativo = _cofre_com_cadastros(api)
+    dados(api.lancar({"data": "05/01/2026", "tipo": "COMPRA", "ativo": "PETR4",
+                      "instituicao": "Corretora Teste", "quantidade": 100,
+                      "preco": 30.0, "custos": 5.0}))
+    dados(api.lancar({"data": "10/03/2026", "tipo": "COMPRA", "ativo": "PETR4",
+                      "instituicao": "Corretora Teste", "quantidade": 50,
+                      "preco": 32.0}))
+    d = dados(api.painel())
+    assert [a["competencia"] for a in d["aportes_mes"]] == ["JAN/26", "MAR/26"]
+    # acumulado, não o do mês: o gráfico é de patrimônio investido
+    assert [a["acumulado"] for a in d["aportes_mes"]] == [3005.0, 4605.0]

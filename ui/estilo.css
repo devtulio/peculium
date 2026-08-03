@@ -3,18 +3,21 @@
    fundo, texto e detalhes seguem a paleta ativa. */
 
 :root[data-tema="atrium"] {
+  --serie1:#63234c; --serie2:#8d3a70; --serie3:#c08bad; --serie4:#8a6f3a;
   --bg:#f6f4ef; --superficie:#ffffff; --superficie2:#efece4; --texto:#2a2622;
   --suave:#6b6459; --borda:#ddd7cb; --destaque:#63234c; --destaque-fg:#ffffff;
   --alta:#1a7f4b; --baixa:#a32020; --erro:#a32020; --serif-valor:system-ui;
   --sombra:0 1px 3px rgba(0,0,0,.07);
 }
 :root[data-tema="cera"] {
+  --serie1:#63234c; --serie2:#8d3a70; --serie3:#c08bad; --serie4:#7c6326;
   --bg:#efe6d2; --superficie:#f7f1e2; --superficie2:#e8dcc2; --texto:#33291b;
   --suave:#6a5c43; --borda:#d8c9a8; --destaque:#63234c; --destaque-fg:#f7f1e2;
   --alta:#1a6b42; --baixa:#8f2020; --erro:#8f2020; --serif-valor:Georgia,serif;
   --sombra:0 1px 3px rgba(90,70,30,.12);
 }
 :root[data-tema="aerarium"] {
+  --serie1:#e0a94a; --serie2:#c07ab0; --serie3:#6fa8dc; --serie4:#7fcf9c;
   --bg:#14121a; --superficie:#1e1b25; --superficie2:#272232; --texto:#e8e3dc;
   --suave:#9d95a6; --borda:#332d3f; --destaque:#e0a94a; --destaque-fg:#14121a;
   --alta:#3fd08a; --baixa:#ff7a6b; --erro:#ff7a6b; --serif-valor:system-ui;
@@ -188,6 +191,34 @@ tr.editavel:focus-visible { outline:2px solid var(--destaque); outline-offset:-2
                  background:var(--superficie2); }
 .selo-situacao.grave { border-color:var(--erro); color:var(--erro); }
 .selo-situacao.ok { border-color:var(--alta); color:var(--alta); }
+
+/* painel — modelo régua + tabela ---------------------------------------- */
+.somas { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+         border:1px solid var(--borda); background:var(--superficie);
+         border-radius:10px; overflow:hidden; margin-bottom:1rem; }
+.soma { padding:.9rem 1rem; border-right:1px solid var(--borda); }
+.soma:last-child { border-right:0; }
+.soma .k { font-size:.68rem; text-transform:uppercase; letter-spacing:.09em;
+           color:var(--suave); }
+.soma .v { font:1.55rem/1.15 var(--serif-valor); margin-top:.35rem;
+           font-variant-numeric:tabular-nums; }
+.soma .n { font-size:.75rem; color:var(--suave); margin-top:.2rem; }
+
+.faixa { display:flex; height:24px; border-radius:6px; overflow:hidden;
+         border:1px solid var(--borda); margin-bottom:.7rem; }
+.faixa i { display:block; height:100%; }
+.chaves { display:grid; gap:.35rem; font-size:.86rem; }
+.chaves > div { display:flex; justify-content:space-between; gap:1rem; }
+.chaves .pip { width:9px; height:9px; border-radius:2px; display:inline-block;
+               margin-right:.45rem; }
+
+.nota-divergencia { margin-top:.9rem; padding:.7rem .9rem; font-size:.85rem;
+  background:var(--superficie); border:1px solid var(--borda);
+  border-left:4px solid var(--erro); border-radius:0 8px 8px 0; }
+.nota-divergencia b { color:var(--erro); }
+.nota-divergencia ul { margin:.5rem 0 0; padding-left:1.1rem; color:var(--suave);
+                       display:grid; gap:.25rem; }
+.nota-divergencia ul b { color:var(--texto); }
 
 .form-grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
               gap:.8rem; align-items:end; }

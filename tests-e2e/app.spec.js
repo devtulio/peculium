@@ -49,11 +49,38 @@ test.describe('navegação', () => {
     }
   });
 
-  test('o painel mostra os indicadores e os alertas', async ({ page }) => {
+  test('o painel mostra as somas e os alertas', async ({ page }) => {
     await destrancar(page);
-    await expect(page.locator('.cartao')).toHaveCount(6);
+    await expect(page.locator('.soma')).toHaveCount(4);
     await expect(page.locator('.alerta.grave')).toContainText('DARF');
     await expect(page.locator('#view')).toContainText('R$ 3.006,29');
+    // o cifrão vem depois da seta: "R$ ▲ +18,53" lê como duas frases
+    await expect(page.locator('.somas .alta')).toContainText('▲ +R$ 18,53');
+    // a média é sobre os meses que tiveram provento, não sobre o ano: dividir
+    // por 12 em agosto diria metade do que ele recebe por mês
+    await expect(page.locator('.somas')).toContainText('média de R$ 16,50 ao mês');
+  });
+
+  test('a régua traz composição, posições e os dois gráficos', async ({ page }) => {
+    await destrancar(page);
+    // barra empilhada em vez de rosca, um pedaço por classe
+    await expect(page.locator('.faixa i')).toHaveCount(2);
+    // a classe aparece por extenso: "FII" e "ACAO" são código de banco
+    await expect(page.locator('.chaves')).toContainText('Fundos imobiliários · 2');
+    await expect(page.locator('.chaves')).toContainText('Ações · 1');
+    // tabela completa de posições, não só as maiores
+    await expect(page.locator('#view table tbody tr')).toHaveCount(3);
+    await expect(page.locator('#view svg[aria-label="Proventos por mês"]')).toBeVisible();
+    await expect(page.locator('#view svg[aria-label="Aportes acumulados por mês"]')).toBeVisible();
+  });
+
+  test('a divergência com a B3 fica em destaque no painel', async ({ page }) => {
+    await destrancar(page);
+    const nota = page.locator('.nota-divergencia');
+    await expect(nota).toContainText('1 papel(is) a conferir');
+    await expect(nota).toContainText('03/08/2026');
+    await expect(nota).toContainText('a B3 informa R$ 12,05 a mais');
+    await expect(nota).toContainText('ROXO34');
   });
 });
 

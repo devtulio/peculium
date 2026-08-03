@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.7.1"
+VERSAO = "0.8.0"
 
 
 def raiz() -> Path:
@@ -230,9 +230,10 @@ class Api:
         hoje = date.today().isoformat()
         ano = hoje[:4]
 
-        classes: dict[str, float] = {}
+        classes: dict[str, dict] = {}
         mercado = custo = 0.0
         sem_cotacao = []
+        posicoes = []
         for p in carteira:
             preco = cotacoes.preco(self._conn, p.ativo_id)
             if preco is None:
@@ -240,9 +241,46 @@ class Api:
             valor = (preco or p.preco_medio) * p.quantidade
             mercado += valor
             custo += p.custo_total
-            classes[p.classe] = classes.get(p.classe, 0.0) + valor
+            atual = classes.setdefault(p.classe, {"valor": 0.0, "ativos": 0})
+            atual["valor"] += valor
+            atual["ativos"] += 1
+            posicoes.append({"ticker": p.ticker, "classe": p.classe,
+                             "quantidade": p.quantidade, "valor": valor,
+                             "custo": p.custo_total})
 
         proventos_ano = sum(p.valor for p in ap.proventos if p.data[:4] == ano)
+        # média sobre os meses que tiveram provento, não sobre o ano inteiro:
+        # dividir por 12 em agosto diria metade do que o usuário recebe por mês
+        meses_com_provento = len({p.data[:7] for p in ap.proventos
+                                  if p.data[:4] == ano and p.valor})
+        meses_de_aporte = self._conn.execute(
+            "SELECT count(DISTINCT substr(data,1,7)) FROM lancamentos"
+            " WHERE tipo='COMPRA' AND estorna_id IS NULL").fetchone()[0]
+
+        # séries dos dois gráficos do painel. Rótulo curto (MAI/26) porque no
+        # eixo o mês por extenso não cabe em doze colunas
+        def _curto(competencia: str) -> str:
+            mes = ("JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
+                   "JUL", "AGO", "SET", "OUT", "NOV", "DEZ")[int(competencia[5:7]) - 1]
+            return f"{mes}/{competencia[2:4]}"
+
+        por_mes: dict[str, float] = {}
+        for p in ap.proventos:
+            if p.data[:4] == ano:
+                por_mes[p.data[:7]] = por_mes.get(p.data[:7], 0.0) + p.valor
+        proventos_mes = [{"competencia": _curto(m), "valor": round(v, 2)}
+                         for m, v in sorted(por_mes.items())]
+
+        acumulado, aportes_mes = 0.0, []
+        for linha in self._conn.execute(
+                "SELECT substr(data,1,7) AS m, sum(valor + custos) AS v"
+                " FROM lancamentos WHERE tipo='COMPRA' AND estorna_id IS NULL"
+                "   AND id NOT IN (SELECT estorna_id FROM lancamentos"
+                "                  WHERE estorna_id IS NOT NULL)"
+                " GROUP BY m ORDER BY m"):
+            acumulado += linha["v"]
+            aportes_mes.append({"competencia": _curto(linha["m"]),
+                                "acumulado": round(acumulado, 2)})
         aportes_ano = self._conn.execute(
             "SELECT coalesce(sum(valor + custos), 0) FROM lancamentos"
             " WHERE tipo IN ('COMPRA','SUBSCRICAO') AND estorna_id IS NULL"
@@ -265,12 +303,38 @@ class Api:
         for aviso in ap.avisos:
             alertas.append({"tipo": "razao", "grave": True, "texto": aviso})
 
+        conferencia = importar_posicao.ultima_conferencia(self._conn)
+        divergencia = None
+        if conferencia and conferencia.problemas:
+            faltando = {d.ticker: d for d in conferencia.problemas}
+            valores = {i.ticker.upper(): (i.valor or 0.0) for i in conferencia.itens}
+            divergencia = {
+                "data": textos.data_br(conferencia.data),
+                "confere": conferencia.confere,
+                "total": len(conferencia.divergencias),
+                # só o que a B3 tem a mais entra na conta da diferença; o que
+                # existe só aqui já está somado no patrimônio
+                "a_mais": round(sum(valores.get(t, 0.0) for t, d in faltando.items()
+                                    if d.situacao == importar_posicao.SO_NA_B3), 2),
+                "itens": [{"ticker": d.ticker, "situacao": d.situacao,
+                           "no_peculium": d.no_peculium, "na_b3": d.na_b3,
+                           "valor": valores.get(d.ticker, 0.0),
+                           "observacao": d.observacao}
+                          for d in conferencia.problemas],
+            }
+
         return {
             "patrimonio": mercado, "custo": custo, "resultado": mercado - custo,
             "proventos_ano": proventos_ano, "aportes_ano": aportes_ano,
             "ativos": len(carteira), "alertas": alertas,
-            "classes": [{"classe": k, "valor": v} for k, v in
-                        sorted(classes.items(), key=lambda x: -x[1])],
+            "meses_com_provento": meses_com_provento,
+            "meses_de_aporte": meses_de_aporte,
+            "proventos_mes": proventos_mes, "aportes_mes": aportes_mes,
+            "divergencia": divergencia,
+            "posicoes": sorted(posicoes, key=lambda x: -x["valor"]),
+            "classes": [{"classe": k, "valor": v["valor"], "ativos": v["ativos"]}
+                        for k, v in
+                        sorted(classes.items(), key=lambda x: -x[1]["valor"])],
             "maiores": [{"ticker": p.ticker, "classe": p.classe,
                          "valor": (cotacoes.preco(self._conn, p.ativo_id)
                                    or p.preco_medio) * p.quantidade,

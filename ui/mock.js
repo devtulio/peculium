@@ -53,14 +53,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.7.1', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.8.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.7.1' })
+        ? ok({ config, versao: '0.8.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.7.1' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.8.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -69,12 +69,28 @@
       painel: () => ok({
         patrimonio: 3006.29, custo: 2987.76, resultado: 18.53,
         proventos_ano: 33, aportes_ano: 2987.76, ativos: 3,
+        meses_com_provento: 2, meses_de_aporte: 3,
+        proventos_mes: [{ competencia: 'MAI/26', valor: 12 },
+                        { competencia: 'JUN/26', valor: 0 },
+                        { competencia: 'JUL/26', valor: 21 }],
+        aportes_mes: [{ competencia: 'JAN/26', acumulado: 973.46 },
+                      { competencia: 'MAI/26', acumulado: 1978.55 },
+                      { competencia: 'JUL/26', acumulado: 2987.76 }],
+        posicoes: [
+          { ticker: 'KLBN4', classe: 'ACAO', quantidade: 285, valor: 1060.20, custo: 1009.21 },
+          { ticker: 'SNAG11', classe: 'FII', quantidade: 100, valor: 1005.09, custo: 1005.09 },
+          { ticker: 'MXRF11', classe: 'FII', quantidade: 100, valor: 941.00, custo: 973.46 }],
+        divergencia: { data: '03/08/2026', confere: 3, total: 4, a_mais: 12.05,
+          itens: [{ ticker: 'ROXO34', situacao: 'SO_NA_B3', no_peculium: 0, na_b3: 1,
+                    valor: 12.05,
+                    observacao: 'a B3 tem e o Peculium não — falta o lançamento de compra' }] },
         alertas: [
           { tipo: 'darf', grave: true,
             texto: 'DARF 06/2026 de R$ 1.533,00 vencido em 31/07/2026' },
           { tipo: 'cotacao', grave: false,
             texto: '1 ativo(s) sem cotação, avaliados pelo preço médio' }],
-        classes: [{ classe: 'FII', valor: 1946.09 }, { classe: 'ACAO', valor: 1060.2 }],
+        classes: [{ classe: 'FII', valor: 1946.09, ativos: 2 },
+                  { classe: 'ACAO', valor: 1060.2, ativos: 1 }],
         maiores: CARTEIRA.map(p => ({ ticker: p.ticker, classe: p.classe,
                                       valor: p.mercado, custo: p.custo })),
       }),

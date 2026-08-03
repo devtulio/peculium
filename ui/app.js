@@ -13,12 +13,15 @@ const qtd = v => (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigit
 const pu = v => (Number(v) || 0).toLocaleString('pt-BR',
   { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 
-/* Alta e baixa nunca só por cor: sinal, seta e valor sempre juntos. */
-function sinal(v) {
+/* Alta e baixa nunca só por cor: sinal, seta e valor sempre juntos.
+   `moeda` põe o R$ DEPOIS da seta — "R$ ▲ +2,60" lê como se o cifrão fosse de
+   outra frase. */
+function sinal(v, moeda = false) {
   const n = Number(v) || 0;
-  if (Math.abs(n) < 0.005) return `<span>${brl(0)}</span>`;
+  const cifrao = moeda ? 'R$ ' : '';
+  if (Math.abs(n) < 0.005) return `<span>${cifrao}${brl(0)}</span>`;
   const classe = n > 0 ? 'alta' : 'baixa';
-  return `<span class="${classe}">${n > 0 ? '▲ +' : '▼ −'}${brl(Math.abs(n))}</span>`;
+  return `<span class="${classe}">${n > 0 ? '▲ +' : '▼ −'}${cifrao}${brl(Math.abs(n))}</span>`;
 }
 const esc = t => String(t ?? '').replace(/[&<>"]/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -264,32 +267,137 @@ async function cadastros() {
 
 async function verPainel() {
   const d = await api('painel');
+  const total = d.patrimonio || 1;
+  const pct = v => brl(100 * v / total) + '%';
   const alertas = d.alertas.map(a =>
     `<div class="alerta ${a.grave ? 'grave' : ''}">
        <span class="marcador">${a.grave ? '!' : 'i'}</span>
        <span>${esc(a.texto)}</span></div>`).join('');
-  const total = d.classes.reduce((s, c) => s + c.valor, 0) || 1;
 
   $('#view').innerHTML = `
     ${alertas}
-    <div class="cartoes">
-      ${cartao('Patrimônio', 'R$ ' + brl(d.patrimonio))}
-      ${cartao('Custo de aquisição', 'R$ ' + brl(d.custo))}
-      ${cartao('Resultado não realizado', sinal(d.resultado))}
-      ${cartao('Proventos no ano', 'R$ ' + brl(d.proventos_ano))}
-      ${cartao('Aportes no ano', 'R$ ' + brl(d.aportes_ano))}
-      ${cartao('Ativos em carteira', d.ativos)}
+    <div class="somas">
+      ${soma('Patrimônio', 'R$ ' + brl(d.patrimonio),
+             `${d.ativos} ativo(s) em ${d.classes.length} classe(s)`)}
+      ${soma('Custo de aquisição', 'R$ ' + brl(d.custo),
+             d.meses_de_aporte ? `aportado em ${d.meses_de_aporte} mês(es)` : '—')}
+      ${soma('Resultado não realizado', sinal(d.resultado, true),
+             d.custo
+               ? (d.resultado >= 0 ? '+' : '−')
+                 + brl(Math.abs(100 * d.resultado / d.custo)) + '% sobre o custo'
+               : '—')}
+      ${soma('Proventos no ano', 'R$ ' + brl(d.proventos_ano),
+             d.meses_com_provento
+               ? `média de R$ ${brl(d.proventos_ano / d.meses_com_provento)} ao mês`
+               : 'nenhum recebido este ano')}
     </div>
+
     <div class="painel-colunas">
-      <div class="bloco"><h3>Alocação por classe</h3>
-        ${tabela(['Classe', 'Valor', '%'], d.classes.map(c => [
-          esc(c.classe), 'R$ ' + brl(c.valor),
-          brl(100 * c.valor / total) + '%']), { numericas: [1, 2] })}</div>
-      <div class="bloco"><h3>Maiores posições</h3>
-        ${tabela(['Ativo', 'Classe', 'Mercado', 'Resultado'], d.maiores.map(m => [
-          esc(m.ticker), esc(m.classe), 'R$ ' + brl(m.valor),
-          sinal(m.valor - m.custo)]), { numericas: [2, 3] })}</div>
+      <div>
+        <div class="bloco" style="margin-bottom:1rem"><h3>Composição da carteira</h3>
+          ${faixaClasses(d.classes, total)}
+          ${divergencia(d.divergencia)}
+        </div>
+      </div>
+      <div>
+        <div class="bloco" style="margin-bottom:1rem"><h3>Proventos mês a mês</h3>
+          ${barrasProventos(d.proventos_mes || [])}
+        </div>
+        <div class="bloco"><h3>Aportes acumulados</h3>
+          ${linhaAportes(d.aportes_mes || [])}
+        </div>
+      </div>
+    </div>
+
+    <div class="bloco" style="margin-top:1rem"><h3>Posições</h3>
+      ${tabela(['Ativo', 'Classe', 'Quantidade', 'Preço médio', 'Valor', '% carteira'],
+        d.posicoes.map(p => [
+          esc(p.ticker), esc(nomeClasse(p.classe)), qtd(p.quantidade),
+          pu(p.custo / (p.quantidade || 1)), brl(p.valor), pct(p.valor)]),
+        { numericas: [2, 3, 4, 5],
+          vazio: 'Carteira vazia — importe ou lance uma compra' })}
     </div>`;
+}
+
+const NOME_CLASSE = {
+  ACAO: 'Ações', FII: 'Fundos imobiliários', ETF: 'ETF', BDR: 'BDR',
+  UNIT: 'Units', RF: 'Renda fixa', TESOURO: 'Tesouro Direto',
+};
+const nomeClasse = c => NOME_CLASSE[c] || c;
+
+function soma(rotulo, valor, nota) {
+  return `<div class="soma"><div class="k">${esc(rotulo)}</div>
+    <div class="v">${valor}</div><div class="n">${esc(nota)}</div></div>`;
+}
+
+/* Barra empilhada em vez de rosca: com três ou quatro classes ela compara
+   proporções melhor, e não precisa de legenda separada para ser lida. */
+function faixaClasses(classes, total) {
+  if (!classes.length) return '<p class="vazio">Carteira vazia</p>';
+  const faixa = classes.map((c, i) =>
+    `<i style="width:${100 * c.valor / total}%;background:var(--serie${(i % 4) + 1})"
+        title="${esc(nomeClasse(c.classe))}"></i>`).join('');
+  const chaves = classes.map((c, i) => `
+    <div><span><span class="pip" style="background:var(--serie${(i % 4) + 1})"></span>${esc(nomeClasse(c.classe))}
+      · ${c.ativos}</span>
+      <span>R$ ${brl(c.valor)} <b>${brl(100 * c.valor / total)}%</b></span></div>`).join('');
+  return `<div class="faixa">${faixa}</div><div class="chaves">${chaves}</div>`;
+}
+
+/* O painel encara a diferença em vez de escondê-la: patrimônio que não bate com
+   a corretora é o sintoma mais caro que este programa pode ter. */
+function divergencia(d) {
+  if (!d) return '';
+  const lista = d.itens.map(i =>
+    `<li><b>${esc(i.ticker)}</b> — ${esc(i.observacao)}</li>`).join('');
+  return `<div class="nota-divergencia">
+    <p><b>${d.itens.length} papel(is) a conferir.</b>
+      Comparado com a posição da B3 de ${esc(d.data)}: ${d.confere} de ${d.total}
+      conferem${d.a_mais ? `, e a B3 informa R$ ${brl(d.a_mais)} a mais` : ''}.</p>
+    <ul>${lista}</ul></div>`;
+}
+
+function barrasProventos(meses) {
+  if (!meses.length) return '<p class="vazio">Nenhum provento recebido</p>';
+  const teto = Math.max(...meses.map(m => m.valor)) || 1;
+  const larg = 400 / meses.length;
+  const barras = meses.map((m, i) => {
+    const h = Math.max(2, 88 * m.valor / teto);
+    return `<rect x="${18 + i * larg + larg * 0.22}" y="${118 - h}"
+              width="${larg * 0.56}" height="${h}" rx="2"
+              fill="var(--serie${(i % 4) + 1})"></rect>
+      <text x="${18 + i * larg + larg / 2}" y="${112 - h}" text-anchor="middle"
+        font-family="var(--serif-valor)" font-size="10" fill="currentColor">${brl(m.valor)}</text>
+      <text x="${18 + i * larg + larg / 2}" y="134" text-anchor="middle"
+        font-size="9.5" fill="var(--suave)">${esc(m.competencia)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 420 145" width="100%" height="145" role="img"
+    aria-label="Proventos por mês">
+    <line x1="14" y1="118" x2="414" y2="118" stroke="var(--borda)"/>${barras}</svg>`;
+}
+
+function linhaAportes(meses) {
+  if (meses.length < 2) return '<p class="vazio">Aportes insuficientes para o gráfico</p>';
+  const teto = Math.max(...meses.map(m => m.acumulado)) || 1;
+  const x = i => 30 + i * (380 / (meses.length - 1));
+  const y = v => 118 - 92 * v / teto;
+  const pontos = meses.map((m, i) => `${x(i)} ${y(m.acumulado)}`).join(' L ');
+  const bolas = meses.map((m, i) =>
+    `<circle cx="${x(i)}" cy="${y(m.acumulado)}" r="3" fill="var(--serie1)"/>`).join('');
+  const rotulos = meses.map((m, i) =>
+    `<text x="${x(i)}" y="134" text-anchor="middle" font-size="9.5"
+       fill="var(--suave)">${esc(m.competencia)}</text>`).join('');
+  return `<svg viewBox="0 0 420 145" width="100%" height="145" role="img"
+    aria-label="Aportes acumulados por mês">
+    <line x1="24" y1="118" x2="414" y2="118" stroke="var(--borda)"/>
+    <line x1="24" y1="72" x2="414" y2="72" stroke="var(--borda)" opacity=".45"/>
+    <line x1="24" y1="26" x2="414" y2="26" stroke="var(--borda)" opacity=".45"/>
+    <path d="M ${pontos}" fill="none" stroke="var(--serie1)" stroke-width="2.2"/>
+    ${bolas}${rotulos}
+    <text x="20" y="29" text-anchor="end" font-size="9.5"
+      fill="var(--suave)">${teto >= 1000 ? (teto / 1000).toFixed(1).replace('.', ',') + ' K'
+                                         : brl(teto)}</text>
+    <text x="20" y="121" text-anchor="end" font-size="9.5" fill="var(--suave)">0</text></svg>`;
 }
 
 /* ── carteira ──────────────────────────────────────────────────────────── */

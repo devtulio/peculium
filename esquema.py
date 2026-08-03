@@ -5,7 +5,7 @@ O banco vive dentro do cofre cifrado; este módulo só descreve a forma dele.
 """
 import sqlite3
 
-VERSAO = 2
+VERSAO = 3
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS config (
@@ -140,6 +140,19 @@ CREATE TABLE IF NOT EXISTS pagamentos (
     data        TEXT NOT NULL,          -- data do pagamento
     obs         TEXT,
     criado_em   TEXT NOT NULL
+);
+
+-- Último retrato da B3, para o painel poder acusar a divergência depois que a
+-- tela de importação fechou. Guarda o que a B3 disse, nunca o que se conclui
+-- dela: a divergência é recalculada contra a carteira a cada abertura, senão
+-- lançar a compra que faltava não apagaria o aviso.
+CREATE TABLE IF NOT EXISTS posicao_b3 (
+    data        TEXT NOT NULL,
+    ticker      TEXT NOT NULL,
+    classe      TEXT NOT NULL,
+    quantidade  REAL NOT NULL,
+    valor       REAL,
+    PRIMARY KEY (data, ticker)
 );
 
 CREATE TABLE IF NOT EXISTS auditoria (
