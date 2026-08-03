@@ -186,6 +186,7 @@ class Cofre:
         self._conn = conn
         self._trava = trava
         self._aberto = True
+        self.aviso_esquema = ""      # migração que não pôde ser aplicada
 
     @property
     def conn(self) -> sqlite3.Connection:
@@ -293,7 +294,26 @@ def _abrir(caminho: str | Path, kek_de: callable, embrulho: str) -> Cofre:
         raise ArquivoInvalido("cofre corrompido ou adulterado") from e
     trava = _Trava(alvo)
     try:
-        return Cofre(alvo, dek, header, _conectar(dump), trava)
+        conn = _conectar(dump)
+        # O esquema é atualizado ao ABRIR, não só ao criar: um cofre gravado por
+        # versão anterior precisa migrar antes da primeira consulta. Sem isto, a
+        # tela quebrava com o erro cru do SQLite ("no such column") na primeira
+        # tela que tocasse a tabela nova.
+        antes = esquema.versao_do_banco(conn)
+        # Migração que falha **não** pode impedir a abertura: um cofre que não
+        # abre é muito pior que uma tela quebrada. `_migrar_2` confere antes de
+        # apagar, então uma falha aqui deixa o banco intacto.
+        try:
+            esquema.aplicar(conn)
+            aviso = ""
+        except Exception as e:                          # noqa: BLE001
+            aviso = (f"o cofre não pôde ser atualizado para o formato desta "
+                     f"versão ({e}). Ele abre, mas telas novas podem falhar.")
+        cofre = Cofre(alvo, dek, header, conn, trava)
+        cofre.aviso_esquema = aviso
+        if not aviso and antes != esquema.VERSAO:
+            cofre.commit()          # a migração só vale se ficar gravada
+        return cofre
     except Exception:
         trava.soltar()
         raise

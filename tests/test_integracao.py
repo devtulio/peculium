@@ -77,6 +77,55 @@ def test_ciclo_completo_dentro_do_cofre(tmp_path):
         assert [r["acao"] for r in lanc.historico(c.conn)] == ["EVENTO", "LANCAR"]
 
 
+def test_cofre_antigo_migra_ao_abrir(tmp_path):
+    """Regressão: `esquema.aplicar` só rodava na CRIAÇÃO do cofre.
+
+    Um cofre gravado por versão anterior nunca migrava, e a primeira tela que
+    tocasse a tabela nova morria com o erro cru do SQLite — foi o que aconteceu
+    na Carteira com "no such column: t.ativo_id"."""
+    import esquema
+    import renda_fixa
+
+    alvo = tmp_path / "antigo.pec"
+    with cofre.criar(alvo, "senha mestra boa", params=LEVE)[0] as c:
+        # rebaixa o cofre para o formato da v0.1.x
+        c.conn.execute("DROP TABLE rf_titulos")
+        c.conn.execute("CREATE TABLE rf_titulos (lancamento_id INTEGER PRIMARY KEY,"
+                       " indexador TEXT, taxa REAL, vencimento TEXT, emissor TEXT,"
+                       " isento INTEGER NOT NULL DEFAULT 0)")
+        c.conn.execute("UPDATE config SET valor='1' WHERE chave='esquema'")
+        c.commit()
+
+    with cofre.abrir(alvo, "senha mestra boa") as c:
+        assert esquema.versao_do_banco(c.conn) == esquema.VERSAO
+        assert renda_fixa.listar(c.conn) == []          # a consulta nova funciona
+
+    # e a migração ficou gravada, não só em memória
+    with cofre.abrir(alvo, "senha mestra boa") as c:
+        colunas = {x[1] for x in c.conn.execute("PRAGMA table_info(rf_titulos)")}
+        assert "ativo_id" in colunas and "lancamento_id" not in colunas
+
+
+def test_migracao_que_falha_nao_impede_abrir(tmp_path):
+    """Um cofre que não abre é muito pior que uma tela quebrada.
+
+    A migração se recusa a rodar quando há dado no formato antigo; nesse caso o
+    cofre tem de abrir mesmo assim, avisando."""
+    alvo = tmp_path / "trancado.pec"
+    with cofre.criar(alvo, "senha mestra boa", params=LEVE)[0] as c:
+        c.conn.execute("DROP TABLE rf_titulos")
+        c.conn.execute("CREATE TABLE rf_titulos (lancamento_id INTEGER PRIMARY KEY,"
+                       " indexador TEXT)")
+        c.conn.execute("INSERT INTO rf_titulos VALUES (1, 'CDI')")   # dado antigo
+        c.conn.execute("UPDATE config SET valor='1' WHERE chave='esquema'")
+        c.commit()
+
+    with cofre.abrir(alvo, "senha mestra boa") as c:
+        assert c.aviso_esquema and "não pôde ser atualizado" in c.aviso_esquema
+        # o resto do programa continua funcionando
+        assert c.conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0] == 0
+
+
 def test_cofre_recusa_banco_corrompido(tmp_path):
     """O GCM prova que os bytes são os que gravamos; não prova que o que
     gravamos era um banco são."""

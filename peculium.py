@@ -30,7 +30,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.3.0"
+VERSAO = "0.3.1"
 
 
 def raiz() -> Path:
@@ -153,7 +153,8 @@ class Api:
                          "Se você trocou a senha porque ela vazou, apague-os."}
 
     def _resumo_inicial(self) -> dict:
-        return {"config": self._config(), "versao": VERSAO}
+        return {"config": self._config(), "versao": VERSAO,
+                "aviso": getattr(self._aberto, "aviso_esquema", "")}
 
     @property
     def _conn(self):
@@ -644,7 +645,8 @@ def main() -> None:
     tema = preferencias().get("tema", "atrium")
     janela = webview.create_window(
         f"Peculium {VERSAO}", f"{raiz() / 'ui' / 'index.html'}?tema={tema}",
-        js_api=api, width=1280, height=820, min_size=(900, 600))
+        js_api=api, width=1280, height=820, min_size=(900, 600),
+        maximized=True)
     api._janela = janela
     webview.start()
 

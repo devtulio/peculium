@@ -111,6 +111,7 @@ async function abrir(dados) {
   $('#app').hidden = false;
   montarMenu();
   await irPara('painel');
+  if (dados.aviso) toast(dados.aviso, true);
 }
 
 function aplicarTema() {

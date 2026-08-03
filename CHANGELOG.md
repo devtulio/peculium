@@ -3,6 +3,23 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.3.1] — 2026-08-03
+
+### Corrigido
+
+- **Cofre criado por versão anterior não migrava.** O esquema só era atualizado na
+  *criação* do cofre, nunca na abertura — então um cofre da v0.1.x continuava com
+  o formato antigo e a Carteira morria com o erro cru do SQLite
+  (`no such column: t.ativo_id`). A atualização passou a acontecer ao abrir, e
+  fica gravada.
+- **Migração que falha não impede mais abrir o cofre.** Um cofre que não abre é
+  muito pior que uma tela quebrada: agora ele abre avisando, e o resto do
+  programa continua funcionando.
+
+### Mudado
+
+- A janela abre **maximizada**.
+
 ## [0.3.0] — 2026-08-03
 
 ### Notas de renda fixa
@@ -150,6 +167,7 @@ operacionais e rentabilidade por XIRR. Saída em HTML timbrado e CSV.
 - **Rede desligada por padrão.** Com a cotação ligada, só o ticker sai daqui.
 - **Datas guardadas em ISO, mostradas em `dd/mm/aaaa`.**
 
+[0.3.1]: https://github.com/devtulio/peculium/releases/tag/v0.3.1
 [0.3.0]: https://github.com/devtulio/peculium/releases/tag/v0.3.0
 [0.2.0]: https://github.com/devtulio/peculium/releases/tag/v0.2.0
 [0.1.1]: https://github.com/devtulio/peculium/releases/tag/v0.1.1
