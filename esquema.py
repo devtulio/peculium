@@ -5,7 +5,7 @@ O banco vive dentro do cofre cifrado; este módulo só descreve a forma dele.
 """
 import sqlite3
 
-VERSAO = 1
+VERSAO = 2
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS config (
@@ -77,13 +77,20 @@ CREATE TABLE IF NOT EXISTS series (
     PRIMARY KEY (indice, data)
 );
 
-CREATE TABLE IF NOT EXISTS rf_titulos (          -- v1.1
-    lancamento_id INTEGER PRIMARY KEY REFERENCES lancamentos(id),
-    indexador     TEXT,
-    taxa          REAL,
-    vencimento    TEXT,
-    emissor       TEXT,
-    isento        INTEGER NOT NULL DEFAULT 0
+-- A curva pertence ao PAPEL, não à compra: dois aportes no mesmo CDB são o mesmo
+-- título com o mesmo preço unitário, e o que muda é a quantidade. Por isso a
+-- chave é o ativo — como no Tesouro, onde o PU do dia vale para quem tem 1 ou
+-- 100 títulos.
+CREATE TABLE IF NOT EXISTS rf_titulos (
+    ativo_id   INTEGER PRIMARY KEY REFERENCES ativos(id),
+    emissao    TEXT NOT NULL,          -- início da curva
+    indexador  TEXT NOT NULL,          -- CDI | PRE | IPCA
+    taxa       REAL NOT NULL,          -- % do CDI, ou taxa anual no prefixado
+    pu_base    REAL NOT NULL DEFAULT 1.0,
+    vencimento TEXT,
+    emissor    TEXT,
+    isento     INTEGER NOT NULL DEFAULT 0,   -- LCI/LCA e poupança
+    obs        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS importacoes (
@@ -152,7 +159,37 @@ CREATE INDEX IF NOT EXISTS ix_pag_comp       ON pagamentos(competencia, codigo);
 """
 
 
-def aplicar(conn: sqlite3.Connection) -> None:
+def versao_do_banco(conn: sqlite3.Connection) -> int:
+    try:
+        linha = conn.execute("SELECT valor FROM config WHERE chave='esquema'").fetchone()
+    except sqlite3.OperationalError:
+        return 0
+    return int(linha[0]) if linha else 0
+
+
+def _migrar_2(conn: sqlite3.Connection) -> None:
+    """`rf_titulos` era chaveada pelo lançamento; a curva pertence ao papel.
+
+    A tabela nunca chegou a ser escrita — nenhuma versão publicada tinha caminho
+    para preenchê-la —, então recriar é seguro. Ainda assim, confere que está
+    vazia antes: apagar dado do usuário para arrumar o formato seria pior que o
+    formato errado."""
+    colunas = {c[1] for c in conn.execute("PRAGMA table_info(rf_titulos)")}
+    if "lancamento_id" not in colunas:
+        return
+    linhas = conn.execute("SELECT count(*) FROM rf_titulos").fetchone()[0]
+    if linhas:
+        raise RuntimeError(
+            f"rf_titulos tem {linhas} linha(s) no formato antigo — migração "
+            f"automática recusada para não descartar dado")
+    conn.execute("DROP TABLE rf_titulos")
     conn.executescript(ESQUEMA)
+
+
+def aplicar(conn: sqlite3.Connection) -> None:
+    atual = versao_do_banco(conn)
+    conn.executescript(ESQUEMA)
+    if atual and atual < 2:
+        _migrar_2(conn)
     conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES ('esquema', ?)",
                  (str(VERSAO),))
