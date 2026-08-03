@@ -5,6 +5,7 @@ import pytest
 
 import cotacoes
 import esquema
+import lancamentos
 
 
 @pytest.fixture
@@ -94,3 +95,31 @@ def test_preco_nunca_extrapola_para_frente(conn):
 
 def test_whitelist_de_host_esta_no_codigo():
     assert cotacoes.HOSTS and all(h and "/" not in h for h in cotacoes.HOSTS)
+
+
+def test_renda_fixa_nao_entra_na_cotacao_online(conn):
+    """CDB não tem código de bolsa: consultá-lo só produz linha de falha.
+
+    Na carteira real eram **dez falhas e zero atualizações** com tudo certo — o
+    relatório dizia que a cotação estava quebrada quando não estava."""
+    conn.execute("INSERT INTO ativos (id, ticker, nome, classe) VALUES"
+                 " (90,'CDB726AM6KA','CDB Inter','RF'),"
+                 " (91,'TESOURO-IPCA-JUROS-2037','Tesouro IPCA+','TESOURO')")
+    for ativo in (90, 91):
+        lancamentos.lancar(conn, data="2026-06-01", tipo="COMPRA", ativo=ativo,
+                           instituicao=1, quantidade=100, preco=1.0)
+    conn.execute("INSERT OR REPLACE INTO config (chave,valor) VALUES ('cotacao_online','1')")
+
+    r = cotacoes.cotar(conn, "2026-08-03", buscador=lambda t: 10.0)
+    assert r.falhas == {}
+    assert cotacoes.preco(conn, 90, "2026-08-03") is None
+
+
+def test_preco_da_b3_nao_e_substituido_pelo_online(conn):
+    """Importar a posição e cotar em seguida: o oficial da B3 fica, e a linha
+    conta como ignorada em vez de sumir sem explicação."""
+    conn.execute("INSERT OR REPLACE INTO config (chave,valor) VALUES ('cotacao_online','1')")
+    cotacoes.registrar(conn, 1, "2026-08-03", 38.5, "B3")
+    r = cotacoes.cotar(conn, "2026-08-03", tickers=["PETR4"], buscador=lambda t: 99.0)
+    assert (r.atualizadas, r.ignoradas) == (0, 1)
+    assert cotacoes.preco(conn, 1, "2026-08-03") == 38.5

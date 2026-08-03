@@ -242,7 +242,12 @@ async function verCarteira() {
     botao('Atualizar cotações', async () => {
       const r = await tentar(() => api('cotar'));
       if (r.desligada) return toast('Cotação online está desligada nas configurações');
-      toast(`${r.atualizadas} cotação(ões) atualizada(s), ${Object.keys(r.falhas).length} falha(s)`);
+      // "ignoradas" precisa aparecer: sem isso, importar a posição da B3 e
+      // logo depois cotar mostrava zero atualizações e nenhuma explicação
+      const falhas = Object.keys(r.falhas).length;
+      toast(`${r.atualizadas} cotação(ões) atualizada(s)`
+          + (r.ignoradas ? `, ${r.ignoradas} já tinha(m) preço de fonte melhor` : '')
+          + (falhas ? `, ${falhas} falha(s)` : ''));
       irPara('carteira');
     }),
     botao('Atualizar curvas', async () => {

@@ -3,6 +3,19 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.4.2] — 2026-08-03
+
+### Corrigido — "Atualizar cotações" acusava falha onde não havia
+
+- **Renda fixa não é mais consultada na bolsa.** CDB e Tesouro não têm código de
+  negociação, então cada um virava uma linha de falha no relatório de cotação.
+  Numa carteira real dava **dez falhas e zero atualizações com tudo certo** — o
+  relatório dizia que a cotação estava quebrada quando não estava. O preço desses
+  papéis vem da curva ou da posição da B3.
+- **O relatório passou a dizer quantas cotações foram ignoradas**, e por quê.
+  Importar a posição da B3 e cotar em seguida mostrava zero atualizações sem
+  nenhuma explicação: o preço oficial da B3 já estava lá e vence o baixado.
+
 ## [0.4.1] — 2026-08-03
 
 ### Corrigido — achado ao conferir a carteira real depois da importação completa

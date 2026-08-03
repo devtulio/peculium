@@ -47,14 +47,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.4.1', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.4.2', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.4.1' })
+        ? ok({ config, versao: '0.4.2' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.4.1' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.4.2' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),

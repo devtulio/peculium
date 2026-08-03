@@ -35,7 +35,7 @@ PRIORIDADE = {MANUAL: 3, "B3": 2, "CURVA": 1, ONLINE: 1}
 @dataclass
 class Resultado:
     atualizadas: int = 0
-    ignoradas: int = 0                       # já havia preço manual na data
+    ignoradas: int = 0     # já havia preço de fonte melhor (manual ou B3)
     falhas: dict[str, str] = field(default_factory=dict)
     desligada: bool = False
 
@@ -89,9 +89,14 @@ def cotar(conn, data: str, tickers: list[str] | None = None,
         return Resultado(desligada=True)
 
     if tickers is None:
+        # Renda fixa e Tesouro ficam de fora: não têm código de bolsa, o preço
+        # deles vem da curva ou da posição da B3. Sem este filtro, todo CDB da
+        # carteira virava uma linha de "falha" num relatório de cotação — dez
+        # falhas e zero atualizações numa carteira em que nada estava errado.
         linhas = conn.execute(
             "SELECT DISTINCT a.ticker FROM ativos a"
-            " JOIN lancamentos l ON l.ativo_id = a.id WHERE a.ativo = 1")
+            " JOIN lancamentos l ON l.ativo_id = a.id"
+            " WHERE a.ativo = 1 AND a.classe NOT IN ('RF','TESOURO')")
         tickers = [r[0] for r in linhas]
 
     ids = {str(r[0]).upper(): r[1] for r in conn.execute("SELECT ticker, id FROM ativos")}
