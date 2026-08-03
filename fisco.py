@@ -36,6 +36,18 @@ CODIGO_DARF = "6015"        # ganhos líquidos em renda variável, pessoa físic
 # bolsa e compensam prejuízo com elas, mas não têm isenção.
 ISENTAVEIS = ("ACAO", "UNIT")
 
+# Renda fixa NÃO entra na apuração mensal: o imposto é retido na fonte pela
+# tabela regressiva e é definitivo. Deixá-la cair no balde swing geraria DARF de
+# 15% sobre um rendimento que já foi tributado — imposto pago duas vezes.
+EXCLUSIVA = ("RF", "TESOURO", "FUNDO")
+
+# Lei 11.033/2004 art. 1º: alíquota pelo prazo decorrido, em dias corridos.
+REGRESSIVA = ((180, 0.225), (360, 0.20), (720, 0.175), (10 ** 9, 0.15))
+
+
+def aliquota_regressiva(dias: int) -> float:
+    return next(taxa for limite, taxa in REGRESSIVA if dias <= limite)
+
 
 @dataclass
 class Balde:
@@ -82,6 +94,7 @@ class Fisco:
     prejuizo: dict[str, float] = field(default_factory=dict)
     irrf_a_compensar: dict[str, float] = field(default_factory=dict)
     acumulado_pendente: float = 0.0        # abaixo do piso, esperando o mês seguinte
+    exclusiva: list[razao.Venda] = field(default_factory=list)   # renda fixa
     avisos: list[str] = field(default_factory=list)
 
     def mes(self, competencia: str) -> list[Balde]:
@@ -175,7 +188,15 @@ def apurar(ap: razao.Apuracao) -> Fisco:
               irrf_a_compensar={b: 0.0 for b in ALIQUOTA})
     por_mes: dict[str, list[razao.Venda]] = {}
     for v in ap.vendas:
+        if v.classe in EXCLUSIVA:
+            f.exclusiva.append(v)          # tributação exclusiva na fonte
+            continue
         por_mes.setdefault(v.data[:7], []).append(v)
+    if f.exclusiva:
+        f.avisos.append(
+            f"{len(f.exclusiva)} resgate(s) de renda fixa ficaram fora da apuração "
+            f"mensal: o imposto é retido na fonte pela tabela regressiva e é "
+            f"definitivo. Entram no informe anual como tributação exclusiva.")
 
     for competencia in sorted(por_mes):
         vendas = por_mes[competencia]

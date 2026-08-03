@@ -90,6 +90,32 @@ def test_day_trade_tem_aliquota_de_20():
     assert b.balde == fisco.DAY_TRADE and b.imposto == pytest.approx(2_000)
 
 
+def test_renda_fixa_fica_fora_da_apuracao_mensal():
+    """Resgate de CDB caindo no balde swing geraria DARF de 15% sobre rendimento
+    que já foi tributado na fonte — imposto pago duas vezes."""
+    f = apurar(venda("2026-03-10", classe="RF", bruto=11_000, custo_base=10_000),
+               venda("2026-03-11", classe="TESOURO", bruto=5_000, custo_base=4_800))
+    assert f.baldes == [] and f.darfs == []
+    assert len(f.exclusiva) == 2
+    assert any("retido na fonte" in a for a in f.avisos)
+
+
+def test_renda_fixa_nao_contamina_o_prejuizo_das_acoes():
+    f = apurar(venda("2026-03-10", classe="RF", bruto=5_000, custo_base=9_000),
+               venda("2026-04-10", bruto=30_000, custo_base=20_000))
+    (swing,) = f.baldes
+    assert swing.compensado == 0            # prejuízo de RF não compensa ação
+    assert swing.base == pytest.approx(10_000)
+
+
+@pytest.mark.parametrize("dias, esperado", [
+    (1, 0.225), (180, 0.225), (181, 0.20), (360, 0.20),
+    (361, 0.175), (720, 0.175), (721, 0.15), (3000, 0.15),
+])
+def test_tabela_regressiva(dias, esperado):
+    assert fisco.aliquota_regressiva(dias) == esperado
+
+
 def test_fii_e_balde_proprio_sem_isencao():
     f = apurar(venda("2026-03-10", classe="FII", bruto=5_000, custo_base=4_000))
     (b,) = f.baldes
