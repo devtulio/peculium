@@ -314,6 +314,20 @@ test.describe('cadastros editáveis', () => {
       await expect(page.locator('#i-resultado')).toContainText('ReceitaWS');
     });
 
+  test('o campo de CNPJ ocupa a linha inteira do formulário', async ({ page }) => {
+    // regressão: espremido numa coluna de terço, o input cortava a própria
+    // máscara — aparecia "00.000.00" no lugar de "00.000.000/0000-00"
+    await abrirConfig(page);
+    await page.locator('tr[data-editar^="instituicao:"]').first().click();
+    const campo = await page.locator('#modal-corpo .campo-largo').boundingBox();
+    const grade = await page.locator('#modal-corpo .form-grade').boundingBox();
+    expect(campo.width).toBeGreaterThan(grade.width * 0.9);
+
+    // e o input tem de caber um CNPJ formatado inteiro
+    const input = await page.locator('#i-cnpj').boundingBox();
+    expect(input.width).toBeGreaterThan(200);
+  });
+
   test('CNPJ inválido avisa e não preenche o nome', async ({ page }) => {
     await abrirConfig(page);
     await page.click('#btn-inst');

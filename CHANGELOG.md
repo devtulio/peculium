@@ -3,6 +3,17 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.7.1] — 2026-08-03
+
+### Corrigido
+
+- **O formulário de instituição saía espremido.** O CNPJ não é um campo curto:
+  carrega o botão de busca ao lado e a nota de privacidade embaixo. Dividindo a
+  linha em três, o input ficava com uns 90 px e cortava a própria máscara —
+  aparecia `00.000.00` no lugar de `00.000.000/0000-00`. Agora ele ocupa a linha
+  inteira, e os campos comuns ganharam uma coluna mínima maior, o que também
+  desafogou os outros formulários.
+
 ## [0.7.0] — 2026-08-03
 
 ### Adicionado

@@ -189,8 +189,12 @@ tr.editavel:focus-visible { outline:2px solid var(--destaque); outline-offset:-2
 .selo-situacao.grave { border-color:var(--erro); color:var(--erro); }
 .selo-situacao.ok { border-color:var(--alta); color:var(--alta); }
 
-.form-grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+.form-grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
               gap:.8rem; align-items:end; }
+/* Campo que não é curto: tem botão de ação ao lado, ou nota explicativa embaixo.
+   Espremido numa coluna de terço, o input do CNPJ ficava com uns 90px e cortava
+   a própria máscara. */
+.campo-largo { grid-column:1 / -1; }
 .campo { display:grid; gap:.25rem; }
 .campo label { font-size:.78rem; color:var(--suave); }
 .aviso-lista { list-style:none; margin:1rem 0 0; padding:0; display:grid; gap:.4rem;

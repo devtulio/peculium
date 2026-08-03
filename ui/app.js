@@ -1061,7 +1061,7 @@ function formInstituicao(i) {
   // razão social cai no campo de baixo. Mesmo caminho da família SGx.
   modal(i ? `Editar ${i.nome}` : 'Nova instituição', `
     <div class="form-grade">
-      <div class="campo"><label for="i-cnpj">CNPJ</label>
+      <div class="campo campo-largo"><label for="i-cnpj">CNPJ</label>
         <div class="campo-com-acao">
           <input id="i-cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
             value="${i && i.cnpj ? esc(i.cnpj) : ''}">
