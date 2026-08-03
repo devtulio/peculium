@@ -121,11 +121,22 @@ def test_liquidacao_de_negocio_e_descartada(tmp_path, conn):
 
 
 def test_portabilidade_fica_pendente_e_nao_some(tmp_path, conn):
+    """A portabilidade vem em duas linhas, uma por corretora; metade dela não
+    diz para onde o papel foi, então nenhuma das duas vira lançamento.
+
+    O que a linha diz — papel, data, quantidade, corretora e lado — vai junto:
+    sem isso o usuário tinha de abrir a planilha para saber o que lançar."""
     arq = csv_movimentacao(
         tmp_path,
-        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00")
-    (pendente,) = b3.ler(arq, conn).por_situacao(b3.PENDENTE)
-    assert "instituição de destino" in pendente.motivo
+        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00",
+        "Credito;01/06/2026;Transferência;PETR4 - PETROLEO;BETA;100;10,00;1.000,00")
+    saida, entrada = b3.ler(arq, conn).por_situacao(b3.PENDENTE)
+    assert (saida.ticker, saida.quantidade, saida.instituicao) == ("PETR4", 100, "ALFA")
+    assert "portabilidade de saída" in saida.motivo
+    assert entrada.instituicao == "BETA"
+    assert "portabilidade de entrada" in entrada.motivo
+    # o alerta que evita o erro de achar que transferência repõe a compra
+    assert "não cria" in saida.motivo
 
 
 def test_movimentacao_desconhecida_vira_erro(tmp_path, conn):

@@ -238,3 +238,35 @@ def test_migracao_recusa_descartar_dado():
     """)
     with pytest.raises(RuntimeError, match="recusada para não descartar dado"):
         esquema.aplicar(c)
+
+
+def test_papel_sem_cadastro_aparece_na_posicao(conn):
+    """Regressão achada na carteira real: cinco CDBs na tabela principal e o
+    bloco de renda fixa simplesmente não existindo.
+
+    `posicao()` percorria a tabela de títulos, então papel sem cadastro sumia da
+    tela — e papel sem cadastro é o caso **normal**: a Movimentação da B3 cria o
+    ativo de renda fixa sem dizer indexador nem taxa."""
+    lanc.lancar(conn, data="2026-06-01", tipo="COMPRA", ativo=2,
+                       instituicao=1, quantidade=50000, preco=0.01)
+    cotacoes.registrar(conn, 2, HOJE, 0.0102, "B3")
+    linha = [p for p in rf.posicao(conn, HOJE) if p["ticker"] == "LCI-INTER-2027"]
+    assert len(linha) == 1
+    assert linha[0]["quantidade"] == 50000
+    assert linha[0]["pu"] == 0.0102              # cai no preço conhecido
+    assert linha[0]["bruto"] == pytest.approx(510.0)
+    assert "não cadastrado" in linha[0]["erro"]
+
+
+def test_relatorio_de_rf_nao_quebra_sem_cadastro(conn):
+    """O IR regressivo conta da emissão, que só existe no cadastro. Antes, o
+    relatório levantava `ativo N não é um título de renda fixa`."""
+    import relatorios
+
+    lanc.lancar(conn, data="2026-06-01", tipo="COMPRA", ativo=2,
+                       instituicao=1, quantidade=50000, preco=0.01)
+    cotacoes.registrar(conn, 2, HOJE, 0.0102, "B3")
+    rel = relatorios.renda_fixa(conn, HOJE)
+    linha = next(l for l in rel.linhas if l[0] == "LCI-INTER-2027")
+    assert linha[9] == "—" and linha[10] == "—"   # alíquota e IR sem estimativa
+    assert any("não cadastrado" in a for a in rel.avisos)

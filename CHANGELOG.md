@@ -3,6 +3,28 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.4.1] — 2026-08-03
+
+### Corrigido — achado ao conferir a carteira real depois da importação completa
+
+- **O bloco "Renda fixa e Tesouro" sumia da Carteira.** Ele era montado a partir
+  dos títulos *cadastrados*, e papel sem cadastro é o caso **normal**: a
+  Movimentação da B3 cria o ativo de renda fixa sem dizer indexador nem taxa. O
+  resultado era ver cinco CDBs na tabela principal e o bloco de renda fixa
+  simplesmente não existir. Agora ele percorre a carteira, e o papel sem cadastro
+  aparece com o último preço conhecido e a explicação do que falta informar.
+- **O relatório de Renda fixa quebrava** com esses mesmos papéis, porque a
+  alíquota regressiva conta da emissão e a emissão só existe no cadastro. Agora a
+  coluna sai como `—`: sem cadastro não há estimativa a dar, e inventar uma seria
+  estimativa dentro de conta de imposto.
+- **A mensagem da portabilidade dizia o que não era verdade.** Ela afirmava que o
+  arquivo não traz a instituição de destino; ele traz — a portabilidade vem em
+  **duas linhas**, débito na origem e crédito no destino. A linha continua
+  pendente (metade dela não diz para onde o papel foi), mas agora informa papel,
+  data, quantidade, corretora e lado, e avisa que **transferência move posição,
+  não cria**: se o papel veio de uma corretora que o Peculium nunca viu, o que
+  falta é a compra original.
+
 ## [0.4.0] — 2026-08-03
 
 ### Adicionado — conferência contra a B3

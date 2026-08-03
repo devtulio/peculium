@@ -195,28 +195,42 @@ def ir_estimado(conn, ativo_id: int, resgate: str, ganho: float) -> dict:
 
 
 def posicao(conn, data: str | None = None) -> list[dict]:
-    """Títulos em carteira com o valor na curva, para a tela e o relatório."""
+    """Renda fixa em carteira com o valor na curva, para a tela e o relatório.
+
+    **Percorre a carteira, não a tabela de títulos.** Percorrer os títulos
+    escondia o papel que está na carteira sem cadastro — e isso é o caso normal,
+    não a exceção: a Movimentação da B3 cria o ativo de renda fixa sem dizer
+    indexador nem taxa. O usuário via cinco CDBs na tabela principal e o bloco de
+    renda fixa simplesmente não existir."""
     import razao
 
     data = data or date.today().isoformat()
-    carteira = {p.ativo_id: p for p in razao.apurar(conn, data).carteira()}
     saida = []
-    for t in listar(conn):
-        p = carteira.get(t.ativo_id)
-        if p is None:
+    for p in razao.apurar(conn, data).carteira():
+        if p.classe not in CLASSES:
             continue
-        try:
-            unitario, erro = pu(conn, t.ativo_id, data), None
-        except series.SerieIndisponivel as e:
-            unitario = cotacoes.preco(conn, t.ativo_id, data)
-            erro = str(e)
+        t = titulo(conn, p.ativo_id)
+        if t is None:
+            erro = ("título não cadastrado: informe indexador, taxa e PU de "
+                    "emissão para ter a curva. O valor abaixo é o último preço "
+                    "conhecido")
+            unitario = cotacoes.preco(conn, p.ativo_id, data)
+        else:
+            try:
+                unitario, erro = pu(conn, p.ativo_id, data), None
+            except series.SerieIndisponivel as e:
+                unitario = cotacoes.preco(conn, p.ativo_id, data)
+                erro = str(e)
         bruto = (unitario or p.preco_medio) * p.quantidade
         saida.append({
-            "ativo_id": t.ativo_id, "ticker": t.ticker, "classe": t.classe,
-            "emissor": t.emissor, "indexador": t.descricao(),
-            "emissao": t.emissao, "vencimento": t.vencimento, "vencido": t.vencido,
+            "ativo_id": p.ativo_id, "ticker": p.ticker, "classe": p.classe,
+            "emissor": t.emissor if t else None,
+            "indexador": t.descricao() if t else "—",
+            "emissao": t.emissao if t else None,
+            "vencimento": t.vencimento if t else None,
+            "vencido": t.vencido if t else False,
             "quantidade": p.quantidade, "custo": p.custo_total,
             "pu": unitario, "bruto": bruto, "rendimento": bruto - p.custo_total,
-            "isento": t.isento, "erro": erro,
+            "isento": t.isento if t else False, "erro": erro,
         })
     return saida

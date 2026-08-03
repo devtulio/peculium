@@ -292,9 +292,24 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> No
             conf.linhas.append(Linha(i, IGNORADA, motivo=IGNORAR[movimento]))
             continue
         if movimento.startswith("transferencia"):
+            # A portabilidade vem em DUAS linhas: débito na origem, crédito no
+            # destino. Cada uma sozinha não diz para onde o papel foi, e lançar
+            # metade moveria a posição para o nada — por isso fica pendente. Mas
+            # a linha diz a instituição e o lado, e não dizer isso obrigava o
+            # usuário a abrir a planilha para descobrir o que lançar.
+            saida = not _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
+            instituicao = str(linha.get("instituicao") or "").strip()
             conf.linhas.append(Linha(
-                i, PENDENTE, motivo="portabilidade: o arquivo não diz a instituição "
-                                    "de destino — lance à mão para preservar o custo"))
+                i, PENDENTE, ticker=_ticker(linha.get("produto", ""))[0],
+                data=_data(linha["data"]) if linha.get("data") else "",
+                instituicao=instituicao,
+                quantidade=_numero(linha.get("quantidade"), formato),
+                motivo=(f"portabilidade {'de saída' if saida else 'de entrada'}: "
+                        f"lance a transferência à mão para preservar o custo. "
+                        f"Atenção: transferência **move** posição entre "
+                        f"corretoras, não cria — se o papel veio de uma corretora "
+                        f"que o Peculium nunca viu, o que falta é a compra "
+                        f"original, com o preço que você pagou lá")))
             continue
         if SUBSCRICAO in movimento:
             conf.linhas.append(Linha(

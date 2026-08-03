@@ -281,8 +281,12 @@ def renda_fixa(conn, data: str | None = None) -> Relatorio:
     for p in _rf.posicao(conn, data):
         custo_total += p["custo"]
         bruto_total += p["bruto"]
-        ir = _rf.ir_estimado(conn, p["ativo_id"], data or date.today().isoformat(),
-                             p["rendimento"])
+        # a alíquota regressiva conta da emissão, e a emissão só existe no
+        # cadastro: sem ele não há estimativa a dar, e inventar uma seria
+        # estimativa dentro de conta de imposto
+        ir = (_rf.ir_estimado(conn, p["ativo_id"], data or date.today().isoformat(),
+                              p["rendimento"])
+              if _rf.titulo(conn, p["ativo_id"]) else None)
         if p["erro"]:
             sem_curva.append(f"{p['ticker']}: {p['erro']}")
         linhas.append([
@@ -291,8 +295,10 @@ def renda_fixa(conn, data: str | None = None) -> Relatorio:
             f"{p['quantidade']:g}", brl(p["custo"]),
             brl(p["pu"]) if p["pu"] else "—", brl(p["bruto"]),
             sinal(p["rendimento"]),
-            "isento" if p["isento"] else f"{ir['aliquota'] * 100:.1f}%",
-            brl(ir["imposto"]), brl(p["bruto"] - ir["imposto"])])
+            "—" if ir is None else "isento" if p["isento"]
+            else f"{ir['aliquota'] * 100:.1f}%",
+            "—" if ir is None else brl(ir["imposto"]),
+            brl(p["bruto"] - (ir["imposto"] if ir else 0.0))])
 
     rel = Relatorio(
         "Renda fixa e Tesouro",
