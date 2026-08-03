@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.5.0</title>
+<title>Manual Operacional — Peculium v0.6.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.5.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.6.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.5.0</div>
+  <div class="versao">VERSÃO 0.6.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.5.0.exe" --verificar</pre>
+<pre>"Peculium v0.6.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -504,6 +504,40 @@ lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.
   porque ela vazou, apague os backups antigos; do contrário eles seguem abrindo
   com a senha comprometida. A chave de recuperação continua valendo.
 </div>
+
+<h3>Cadastros de ativos e instituições</h3>
+
+<p>Em <strong>Configurações › Cadastros</strong>. Clique numa linha para editar.</p>
+
+<p><strong>Renomear um ativo é seguro:</strong> os lançamentos apontam para o
+cadastro, não para o texto do ticker. Trocar a <strong>classe</strong>, porém,
+muda a alíquota do imposto — a troca fica registrada na auditoria, com o antes e
+o depois.</p>
+
+<p><strong>Arquivar</strong> não apaga nem esconde lançamento: o cadastro só
+deixa de ser oferecido em formulário novo.</p>
+
+<p>No cadastro de instituição o <strong>CNPJ vem primeiro</strong>, e é ele que
+preenche o resto: digite e clique em <em>Buscar</em>. A razão social vem da
+Receita — ReceitaWS primeiro, BrasilAPI como reserva. Ao buscar, <strong>só o
+CNPJ digitado sai daqui</strong>; nada da sua carteira. O campo é opcional, e a
+consulta também: sem rede, digite o nome à mão.</p>
+
+<div class="aviso">
+  <strong>Os dígitos verificadores são conferidos.</strong> Um CNPJ com dígito
+  trocado é recusado no cadastro, em vez de ficar guardado e voltar como “não
+  encontrado” toda vez que alguém tentar usá-lo.
+</div>
+
+<h3>Ordenar tabelas</h3>
+
+<p>Toda tabela do programa ordena pelo cabeçalho: clique no nome da coluna para
+ordenar, clique de novo para inverter. Funciona pelo teclado — chegue no
+cabeçalho com Tab e use Enter ou Espaço.</p>
+
+<p>Datas ordenam por data e valores por valor, não pelo texto que aparece na
+tela: <code>10/01/2026</code> não vem antes de <code>05/12/2025</code>, e
+<code>1.029,52</code> não vem antes de <code>285</code>.</p>
 
 <h3>Apagar todos os dados</h3>
 

@@ -158,15 +158,75 @@ async function irPara(chave) {
 
 function tabela(colunas, linhas, { numericas = [], vazio = 'Nada a exibir' } = {}) {
   if (!linhas.length) return `<p class="vazio">${vazio}</p>`;
+  // O cabeçalho é um <button> de verdade, e não um <th> com onclick: ordenar
+  // precisa funcionar pelo teclado, e botão nativo já traz foco, Enter e Espaço.
   const cab = colunas.map((c, i) =>
-    `<th class="${numericas.includes(i) ? 'n' : ''}">${esc(c)}</th>`).join('');
+    `<th class="${numericas.includes(i) ? 'n' : ''}" aria-sort="none">
+       <button type="button" class="ord" data-col="${i}">${esc(c)}<span
+         class="seta" aria-hidden="true"></span></button></th>`).join('');
   const corpo = linhas.map(l => {
     const celulas = (l.celulas || l).map((v, i) =>
       `<td class="${numericas.includes(i) ? 'n' : ''}">${v}</td>`).join('');
-    return `<tr class="${l.classe || ''}">${celulas}</tr>`;
+    const editavel = l.editar
+      ? ` data-editar="${l.editar}" tabindex="0" role="button" title="Clique para editar"`
+      : '';
+    return `<tr class="${l.classe || ''}${l.editar ? ' editavel' : ''}"${editavel}>${celulas}</tr>`;
   }).join('');
   return `<table><thead><tr>${cab}</tr></thead><tbody>${corpo}</tbody></table>`;
 }
+
+/* ── ordenação das tabelas ─────────────────────────────────────────────── */
+
+const DATA_BR = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+const COMPETENCIA_BR = /^(\d{2})\/(\d{4})$/;
+
+/* A célula é texto já formatado para leitura; ordenar por ele direto poria
+   10/01/2026 antes de 05/12/2025 e "1.029,52" antes de "285". */
+function chaveDeOrdem(texto) {
+  const t = String(texto).trim();
+  let m = DATA_BR.exec(t);
+  if (m) return Number(m[3] + m[2] + m[1]);
+  m = COMPETENCIA_BR.exec(t);
+  if (m) return Number(m[2] + m[1]);
+  // o menos que o sinal() desenha é U+2212, não o hífen do teclado
+  const limpo = t.replace(/^R\$\s*/, '').replace(/[▲▼\s%]/g, '')
+    .replace('−', '-').replace(/\./g, '').replace(',', '.');
+  if (limpo && /^[+-]?\d+(\.\d+)?$/.test(limpo)) return Number(limpo);
+  return t.toLowerCase();
+}
+
+function compararOrdem(a, b) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  // número antes de texto: "—" e vazio não se misturam com valores
+  if (typeof a === 'number') return -1;
+  if (typeof b === 'number') return 1;
+  return a.localeCompare(b, 'pt-BR');
+}
+
+function ordenarPor(botao) {
+  const th = botao.closest('th');
+  const tab = th.closest('table');
+  const coluna = Number(botao.dataset.col);
+  const descendente = th.getAttribute('aria-sort') === 'ascending';
+  [...tab.tHead.rows[0].cells].forEach(c => c.setAttribute('aria-sort', 'none'));
+  th.setAttribute('aria-sort', descendente ? 'descending' : 'ascending');
+
+  const corpo = tab.tBodies[0];
+  const sinalOrdem = descendente ? -1 : 1;
+  // sort é estável: linhas com a mesma chave mantêm a ordem em que vieram
+  [...corpo.rows]
+    .sort((x, y) => compararOrdem(chaveDeOrdem(x.cells[coluna]?.textContent ?? ''),
+                                  chaveDeOrdem(y.cells[coluna]?.textContent ?? ''))
+                    * sinalOrdem)
+    .forEach(tr => corpo.appendChild(tr));
+}
+
+// Delegado no documento: as tabelas nascem de innerHTML a cada troca de tela, e
+// religar ouvinte a cada render seria uma linha esquecida em cada tela nova.
+document.addEventListener('click', evento => {
+  const botao = evento.target.closest('table th button.ord');
+  if (botao) ordenarPor(botao);
+});
 
 function cartao(rotulo, valor) {
   return `<div class="cartao"><div class="rotulo">${esc(rotulo)}</div>
@@ -859,12 +919,22 @@ async function verConfig() {
         <div class="campo"><button type="button" class="secundario" id="btn-inst">
           Nova instituição</button></div>
       </div>
+      <p class="trava-nota">Clique numa linha para editar. Renomear um ativo é
+        seguro: os lançamentos apontam para o cadastro, não para o texto do
+        ticker. Trocar a <strong>classe</strong>, porém, muda a alíquota do
+        imposto.</p>
       <div class="painel-colunas" style="margin-top:1rem">
         <div>${tabela(['Ativo', 'Nome', 'Classe'],
-          cad.ativos.map(a => [esc(a.ticker), esc(a.nome || '—'), esc(a.classe)]),
+          cad.ativos.map(a => ({
+            classe: a.ativo ? '' : 'arquivado',
+            editar: `ativo:${a.id}`,
+            celulas: [esc(a.ticker), esc(a.nome || '—'), esc(a.classe)] })),
           { vazio: 'Nenhum ativo cadastrado' })}</div>
         <div>${tabela(['Instituição', 'CNPJ'],
-          cad.instituicoes.map(i => [esc(i.nome), esc(i.cnpj || '—')]),
+          cad.instituicoes.map(i => ({
+            classe: i.ativo ? '' : 'arquivado',
+            editar: `instituicao:${i.id}`,
+            celulas: [esc(i.nome), esc(i.cnpj || '—')] })),
           { vazio: 'Nenhuma instituição cadastrada' })}</div>
       </div>
     </div>
@@ -920,30 +990,96 @@ async function verConfig() {
         async () => { irPara('painel'); }, 'Entendi');
     }, 'Apagar tudo'));
 
-  $('#btn-ativo').addEventListener('click', () => modal('Novo ativo', `
-    <div class="form-grade">
-      <div class="campo"><label for="a-ticker">Ticker</label><input id="a-ticker"></div>
-      <div class="campo"><label for="a-nome">Nome</label><input id="a-nome"></div>
-      <div class="campo"><label for="a-classe">Classe</label>
-        <select id="a-classe">${['ACAO', 'FII', 'ETF', 'BDR', 'UNIT']
-          .map(k => `<option>${k}</option>`).join('')}</select></div>
-    </div>`, async dlg => {
-      await tentar(() => api('cadastrar_ativo', {
-        ticker: $('#a-ticker', dlg).value, nome: $('#a-nome', dlg).value,
-        classe: $('#a-classe', dlg).value }), 'Ativo cadastrado');
-      ESTADO.cadastros = null; irPara('config');
-    }, 'Cadastrar'));
+  $('#btn-ativo').addEventListener('click', () => formAtivo());
+  $('#btn-inst').addEventListener('click', () => formInstituicao());
 
-  $('#btn-inst').addEventListener('click', () => modal('Nova instituição', `
+  $$('#view tr[data-editar]').forEach(tr => {
+    const abrir = () => {
+      const [tipo, id] = tr.dataset.editar.split(':');
+      if (tipo === 'ativo') formAtivo(cad.ativos.find(a => String(a.id) === id));
+      else formInstituicao(cad.instituicoes.find(i => String(i.id) === id));
+    };
+    tr.addEventListener('click', abrir);
+    tr.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+    });
+  });
+}
+
+const CLASSES_ATIVO = ['ACAO', 'FII', 'ETF', 'BDR', 'UNIT', 'RF', 'TESOURO'];
+
+function formAtivo(a) {
+  modal(a ? `Editar ${a.ticker}` : 'Novo ativo', `
     <div class="form-grade">
-      <div class="campo"><label for="i-nome">Nome</label><input id="i-nome"></div>
-      <div class="campo"><label for="i-cnpj">CNPJ</label><input id="i-cnpj"></div>
-    </div>`, async dlg => {
-      await tentar(() => api('cadastrar_instituicao', {
-        nome: $('#i-nome', dlg).value, cnpj: $('#i-cnpj', dlg).value }),
-        'Instituição cadastrada');
+      <div class="campo"><label for="a-ticker">Ticker</label>
+        <input id="a-ticker" value="${a ? esc(a.ticker) : ''}"></div>
+      <div class="campo"><label for="a-nome">Nome</label>
+        <input id="a-nome" value="${a && a.nome ? esc(a.nome) : ''}"></div>
+      <div class="campo"><label for="a-classe">Classe</label>
+        <select id="a-classe">${CLASSES_ATIVO.map(k =>
+          `<option${a && a.classe === k ? ' selected' : ''}>${k}</option>`).join('')}</select></div>
+      ${a ? `<div class="campo"><label for="a-situacao">Situação</label>
+        <select id="a-situacao">
+          <option value="1"${a.ativo ? ' selected' : ''}>Em uso</option>
+          <option value="0"${a.ativo ? '' : ' selected'}>Arquivado</option>
+        </select></div>` : ''}
+    </div>
+    ${a ? `<p class="trava-nota">Renomear é seguro: os lançamentos apontam para o
+      cadastro, não para o texto do ticker. <strong>Arquivar não apaga nem
+      esconde lançamento</strong> — o ativo só deixa de ser oferecido em
+      formulário novo.</p>` : ''}`,
+    async dlg => {
+      const dados = { ticker: $('#a-ticker', dlg).value, nome: $('#a-nome', dlg).value,
+                      classe: $('#a-classe', dlg).value };
+      if (a) dados.ativo = Number($('#a-situacao', dlg).value);
+      await tentar(() => (a ? api('editar_ativo', a.id, dados)
+                            : api('cadastrar_ativo', dados)),
+        a ? 'Ativo atualizado' : 'Ativo cadastrado');
       ESTADO.cadastros = null; irPara('config');
-    }, 'Cadastrar'));
+    }, a ? 'Salvar' : 'Cadastrar');
+}
+
+function formInstituicao(i) {
+  // O CNPJ vem primeiro porque é ele que preenche o resto: digita, busca, e a
+  // razão social cai no campo de baixo. Mesmo caminho da família SGx.
+  modal(i ? `Editar ${i.nome}` : 'Nova instituição', `
+    <div class="form-grade">
+      <div class="campo"><label for="i-cnpj">CNPJ</label>
+        <div class="campo-com-acao">
+          <input id="i-cnpj" inputmode="numeric" placeholder="00.000.000/0000-00"
+            value="${i && i.cnpj ? esc(i.cnpj) : ''}">
+          <button type="button" class="secundario" id="i-buscar">Buscar</button>
+        </div>
+        <p class="trava-nota" id="i-resultado">Opcional. Ao buscar, <strong>só o
+          CNPJ digitado sai daqui</strong> — nada da sua carteira.</p></div>
+      <div class="campo"><label for="i-nome">Nome</label>
+        <input id="i-nome" value="${i ? esc(i.nome) : ''}"></div>
+      ${i ? `<div class="campo"><label for="i-situacao">Situação</label>
+        <select id="i-situacao">
+          <option value="1"${i.ativo ? ' selected' : ''}>Em uso</option>
+          <option value="0"${i.ativo ? '' : ' selected'}>Arquivada</option>
+        </select></div>` : ''}
+    </div>`,
+    async dlg => {
+      const dados = { nome: $('#i-nome', dlg).value, cnpj: $('#i-cnpj', dlg).value };
+      if (i) dados.ativo = Number($('#i-situacao', dlg).value);
+      await tentar(() => (i ? api('editar_instituicao', i.id, dados)
+                            : api('cadastrar_instituicao', dados)),
+        i ? 'Instituição atualizada' : 'Instituição cadastrada');
+      ESTADO.cadastros = null; irPara('config');
+    }, i ? 'Salvar' : 'Cadastrar');
+
+  $('#i-buscar').addEventListener('click', async () => {
+    const aviso = $('#i-resultado');
+    aviso.textContent = 'Consultando…';
+    const achado = await tentar(() => api('consultar_cnpj', $('#i-cnpj').value));
+    // `tentar` já mostrou o erro; aqui só resta dizer o que fazer sem a consulta
+    if (!achado) { aviso.textContent = 'Sem consulta — digite o nome à mão.'; return; }
+    $('#i-cnpj').value = achado.cnpj;
+    $('#i-nome').value = achado.nome;
+    aviso.textContent = `${achado.nome} — ${achado.situacao || 'situação não informada'}`
+                      + ` (via ${achado.fonte})`;
+  });
 }
 
 /* ── partida ───────────────────────────────────────────────────────────── */

@@ -21,6 +21,12 @@
   ];
 
   const LANCAMENTOS = [
+    // 30/01 depois de 05/01 e antes de 18/05: por texto "30/01/2026" iria para o
+    // fim da lista, então esta linha é o que separa ordenar por data de ordenar
+    // por string
+    { id: 4, data_br: '30/01/2026', tipo: 'TAXA', ticker: 'MXRF11',
+      instituicao: 'XP INVESTIMENTOS', quantidade: 0, preco: 0, valor: 1.5,
+      custos: 0, origem: 'MANUAL' },
     { id: 3, data_br: '21/07/2026', tipo: 'COMPRA', ticker: 'KLBN4',
       instituicao: 'XP INVESTIMENTOS', quantidade: 200, preco: 3.5, valor: 700,
       custos: 8.22, origem: 'NOTA', nota: '140560283' },
@@ -47,14 +53,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.5.0', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.6.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.5.0' })
+        ? ok({ config, versao: '0.6.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.5.0' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.6.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -78,7 +84,7 @@
         ativos: [...CARTEIRA.map(p => ({ id: p.ativo_id, ticker: p.ticker,
                                          nome: null, classe: p.classe, ativo: 1 })),
                  { id: 4, ticker: 'CDB5267UW6V', nome: 'CDB Banco XP', classe: 'RF', ativo: 1 }],
-        instituicoes: [{ id: 1, nome: 'XP INVESTIMENTOS', cnpj: '02332886000104', ativo: 1 }],
+        instituicoes: [{ id: 1, nome: 'XP INVESTIMENTOS', cnpj: '02.332.886/0001-04', ativo: 1 }],
         ativos_rf: true,
         tipos: ['COMPRA', 'VENDA', 'BONIFICACAO', 'SUBSCRICAO', 'DIVIDENDO', 'JCP',
                 'RENDIMENTO', 'AMORTIZACAO', 'TAXA', 'IRRF', 'TRANSFERENCIA'],
@@ -89,6 +95,13 @@
       registrar_evento: () => ok({ id: 5 }),
       cadastrar_ativo: () => ok({ id: 9 }),
       cadastrar_instituicao: () => ok({ id: 9 }),
+      editar_ativo: id => ok({ id }),
+      editar_instituicao: id => ok({ id }),
+      // 02.332.886/0001-04 é o CNPJ da XP, que já consta do cadastro de exemplo
+      consultar_cnpj: v => (String(v).replace(/\D/g, '') === '02332886000104'
+        ? ok({ cnpj: '02.332.886/0001-04', nome: 'XP INVESTIMENTOS CCTVM S/A',
+               fantasia: 'XP INVESTIMENTOS', situacao: 'ATIVA', fonte: 'ReceitaWS' })
+        : erro('CNPJ inválido: confira os 14 dígitos')),
       cotar: () => ok({ atualizadas: 2, ignoradas: 0, falhas: {}, desligada: false }),
 
       renda_fixa: () => ok({

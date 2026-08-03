@@ -15,6 +15,7 @@ import traceback
 from datetime import date
 from pathlib import Path
 
+import cnpj
 import cofre
 import cotacoes
 import esquema
@@ -31,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.5.0"
+VERSAO = "0.6.0"
 
 
 def raiz() -> Path:
@@ -363,7 +364,11 @@ class Api:
         return {
             "ativos": [dict(r) for r in self._conn.execute(
                 "SELECT id, ticker, nome, classe, ativo FROM ativos ORDER BY ticker")],
-            "instituicoes": [dict(r) for r in self._conn.execute(
+            # a máscara é aplicada na leitura: CNPJ vindo da importação da B3
+            # entra só com dígitos, e formatar em cada tela seria repetir a regra
+            "instituicoes": [dict(r) | {"cnpj": cnpj.formatar(r["cnpj"]) if r["cnpj"]
+                                        else None}
+                             for r in self._conn.execute(
                 "SELECT id, nome, cnpj, ativo FROM instituicoes ORDER BY nome")],
             "tipos": list(lancamentos.TIPOS), "eventos": list(lancamentos.EVENTOS),
         }
@@ -390,10 +395,77 @@ class Api:
             raise ValueError("nome é obrigatório")
         identificador = self._conn.execute(
             "INSERT INTO instituicoes (nome, cnpj) VALUES (?,?)",
-            (nome, dados.get("cnpj") or None)).lastrowid
+            (nome, self._cnpj_ou_erro(dados.get("cnpj")))).lastrowid
         lancamentos.auditar(self._conn, "INSTITUICAO", f"#{identificador} {nome}")
         self._gravar()
         return {"id": identificador}
+
+    @_resposta
+    @_exige_cofre
+    def editar_ativo(self, identificador: int, dados: dict) -> dict:
+        """Renomear é seguro; os lançamentos apontam para o **id**, não o ticker.
+
+        A classe muda a alíquota do imposto, então a troca é registrada na
+        auditoria com o antes e o depois."""
+        atual = self._conn.execute(
+            "SELECT ticker, nome, classe, ativo FROM ativos WHERE id=?",
+            (int(identificador),)).fetchone()
+        if atual is None:
+            raise ValueError(f"ativo {identificador} não existe")
+        ticker = str(dados.get("ticker", atual["ticker"])).strip().upper()
+        classe = str(dados.get("classe", atual["classe"])).strip().upper()
+        if not ticker or not classe:
+            raise ValueError("ticker e classe são obrigatórios")
+        nome = dados.get("nome") if "nome" in dados else atual["nome"]
+        ativo = int(bool(dados.get("ativo", atual["ativo"])))
+        self._conn.execute(
+            "UPDATE ativos SET ticker=?, nome=?, classe=?, ativo=? WHERE id=?",
+            (ticker, nome or None, classe, ativo, int(identificador)))
+        lancamentos.auditar(
+            self._conn, "ATIVO_EDITADO",
+            f"#{identificador} {atual['ticker']}/{atual['classe']} → {ticker}/{classe}")
+        self._gravar()
+        return {"id": int(identificador)}
+
+    @_resposta
+    @_exige_cofre
+    def editar_instituicao(self, identificador: int, dados: dict) -> dict:
+        atual = self._conn.execute(
+            "SELECT nome, cnpj, ativo FROM instituicoes WHERE id=?",
+            (int(identificador),)).fetchone()
+        if atual is None:
+            raise ValueError(f"instituição {identificador} não existe")
+        nome = str(dados.get("nome", atual["nome"])).strip()
+        if not nome:
+            raise ValueError("nome é obrigatório")
+        documento = self._cnpj_ou_erro(dados.get("cnpj", atual["cnpj"]))
+        ativo = int(bool(dados.get("ativo", atual["ativo"])))
+        self._conn.execute(
+            "UPDATE instituicoes SET nome=?, cnpj=?, ativo=? WHERE id=?",
+            (nome, documento, ativo, int(identificador)))
+        lancamentos.auditar(self._conn, "INSTITUICAO_EDITADA",
+                            f"#{identificador} {atual['nome']} → {nome}")
+        self._gravar()
+        return {"id": int(identificador)}
+
+    @staticmethod
+    def _cnpj_ou_erro(valor) -> str | None:
+        """Vazio é aceito; errado não.
+
+        Um CNPJ com dígito trocado passaria a viver no cadastro e voltaria como
+        "não encontrado" toda vez que alguém tentasse usá-lo."""
+        digitos = cnpj.digitos(valor)
+        if not digitos:
+            return None
+        if not cnpj.valido(digitos):
+            raise ValueError(f"CNPJ inválido: {cnpj.formatar(digitos)}")
+        return cnpj.formatar(digitos)
+
+    @_resposta
+    @_exige_cofre
+    def consultar_cnpj(self, valor: str) -> dict:
+        """Razão social a partir do CNPJ. **Só o CNPJ digitado sai daqui.**"""
+        return cnpj.consultar(valor)
 
     # ------------------------------------------------------------------ impostos
 

@@ -224,6 +224,106 @@ test.describe('impostos', () => {
   });
 });
 
+test.describe('ordenação das tabelas', () => {
+  // a Carteira tem duas tabelas (a principal e o bloco de renda fixa): tudo
+  // aqui é escopado na primeira
+  const principal = page => page.locator('#view table').first();
+  const coluna = (page, n) =>
+    principal(page).locator('tbody tr td:nth-child(' + n + ')');
+  const cabecalho = (page, n) => principal(page).locator('th').nth(n);
+
+  test('clicar no cabeçalho ordena, e clicar de novo inverte', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    const ticker = cabecalho(page, 0).locator('button.ord');
+
+    await ticker.click();
+    await expect(coluna(page, 1)).toHaveText(['KLBN4', 'MXRF11', 'SNAG11']);
+    await expect(cabecalho(page, 0)).toHaveAttribute('aria-sort', 'ascending');
+
+    await ticker.click();
+    await expect(coluna(page, 1)).toHaveText(['SNAG11', 'MXRF11', 'KLBN4']);
+    await expect(cabecalho(page, 0)).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  test('número ordena por valor, não por texto', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    // custo: 1.009,21 / 973,46 / 1.005,09 — por texto, "1.009,21" viria antes de "973,46"
+    await cabecalho(page, 4).locator('button.ord').click();
+    await expect(coluna(page, 5)).toHaveText(['973,46', '1.005,09', '1.009,21']);
+  });
+
+  test('data ordena por dia, não por string', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="lancamentos"]');
+    // 30/01 é o caso que discrimina: por texto ele iria para o fim da lista,
+    // depois de 21/07
+    await cabecalho(page, 0).locator('button.ord').click();
+    await expect(coluna(page, 1)).toHaveText(
+      ['05/01/2026', '30/01/2026', '18/05/2026', '21/07/2026']);
+  });
+
+  test('o cabeçalho é alcançável pelo teclado', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await cabecalho(page, 0).locator('button.ord').focus();
+    await page.keyboard.press('Enter');
+    await expect(cabecalho(page, 0)).toHaveAttribute('aria-sort', 'ascending');
+  });
+});
+
+test.describe('cadastros editáveis', () => {
+  async function abrirConfig(page) {
+    await destrancar(page);
+    await page.click('#menu button[data-view="config"]');
+  }
+
+  test('clicar numa linha abre o ativo preenchido', async ({ page }) => {
+    await abrirConfig(page);
+    await page.locator('tr[data-editar^="ativo:"]').first().click();
+    await expect(page.locator('#modal-titulo')).toContainText('Editar');
+    await expect(page.locator('#a-ticker')).toHaveValue('KLBN4');
+    await expect(page.locator('#a-classe')).toHaveValue('ACAO');
+    await expect(page.locator('#a-situacao')).toBeVisible();   // só na edição
+    await page.fill('#a-ticker', 'KLBN3');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Ativo atualizado');
+  });
+
+  test('novo ativo não oferece situação', async ({ page }) => {
+    await abrirConfig(page);
+    await page.click('#btn-ativo');
+    await expect(page.locator('#a-ticker')).toHaveValue('');
+    await expect(page.locator('#a-situacao')).toHaveCount(0);
+  });
+
+  test('no cadastro de instituição o CNPJ vem primeiro e busca o nome',
+    async ({ page }) => {
+      await abrirConfig(page);
+      await page.click('#btn-inst');
+      // o CNPJ é o primeiro campo do formulário
+      const primeiro = page.locator('#modal-corpo .campo').first();
+      await expect(primeiro.locator('label')).toHaveText('CNPJ');
+      await expect(page.locator('#i-resultado')).toContainText('só o CNPJ digitado sai daqui');
+
+      await page.fill('#i-cnpj', '02332886000104');
+      await page.click('#i-buscar');
+      await expect(page.locator('#i-nome')).toHaveValue('XP INVESTIMENTOS CCTVM S/A');
+      await expect(page.locator('#i-cnpj')).toHaveValue('02.332.886/0001-04');
+      await expect(page.locator('#i-resultado')).toContainText('ReceitaWS');
+    });
+
+  test('CNPJ inválido avisa e não preenche o nome', async ({ page }) => {
+    await abrirConfig(page);
+    await page.click('#btn-inst');
+    await page.fill('#i-cnpj', '02332886000105');
+    await page.click('#i-buscar');
+    await expect(page.locator('#toast')).toContainText('CNPJ inválido');
+    await expect(page.locator('#i-nome')).toHaveValue('');
+  });
+});
+
 test.describe('apagar todos os dados', () => {
   async function abrirZonaDeRisco(page) {
     await destrancar(page);

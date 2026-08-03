@@ -3,6 +3,33 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.6.0] — 2026-08-03
+
+### Adicionado
+
+- **Toda tabela ordena pelo cabeçalho.** Clique para ordenar, clique de novo
+  para inverter. A chave não é o texto da célula: data, competência e número em
+  pt-BR são reconhecidos, senão `10/01/2026` viria antes de `05/12/2025` e
+  `1.029,52` antes de `285`. O cabeçalho é um botão de verdade, com `aria-sort`
+  e navegação por teclado.
+- **Ativos e instituições agora são editáveis** em Configurações › Cadastros:
+  clique na linha. Renomear é seguro — os lançamentos apontam para o cadastro, e
+  não para o texto do ticker. Trocar a classe fica registrado na auditoria, com
+  o antes e o depois, porque a classe muda a alíquota do imposto. Também dá para
+  **arquivar** um cadastro: ele deixa de ser oferecido em formulário novo, sem
+  apagar nem esconder lançamento nenhum.
+- **Busca de CNPJ no cadastro de instituição**, como na família SGx. O CNPJ é o
+  primeiro campo, e é ele que preenche a razão social. ReceitaWS primeiro,
+  BrasilAPI como reserva — o plano gratuito da ReceitaWS concede três consultas
+  por minuto, então a reserva é o caso normal, não a exceção. **Só o CNPJ
+  digitado sai daqui.**
+- **Dígitos verificadores conferidos**, na busca e na gravação. Antes de ir à
+  rede, porque um dígito trocado voltaria como "não encontrado" depois de gastar
+  uma das três consultas do minuto; e na gravação, porque CNPJ errado guardado
+  volta como "não encontrado" toda vez que alguém tentar usá-lo.
+- A **máscara do CNPJ é aplicada na leitura**: o que a importação da B3 gravou
+  só com dígitos passa a aparecer formatado.
+
 ## [0.5.0] — 2026-08-03
 
 ### Adicionado — apagar todos os dados

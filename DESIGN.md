@@ -449,6 +449,26 @@ não contratual — **pode quebrar, e quebrar é aceitável**) e as séries do B
 Verificação de versão nova (GitHub API) segue a mesma regra: opcional, silenciosa
 ao falhar, e **nunca baixa nem troca binário sozinho**.
 
+## 7.1 Consulta de CNPJ (`cnpj.py`) — opcional e contida
+
+Mesma disciplina do `cotacoes.py`, e pelos mesmos motivos: whitelist de host em
+constante de módulo, timeout curto, e **só o CNPJ que o usuário acabou de digitar
+sai daqui**. Nada consulta sozinho — a consulta é um clique explícito num campo
+que o usuário está preenchendo.
+
+Duas fontes, como na família SGx: **ReceitaWS** primeiro, **BrasilAPI** como
+reserva. A reserva não é redundância decorativa: o plano gratuito da ReceitaWS
+concede três consultas por minuto, e a segunda tentativa é o caso normal.
+
+**Os dígitos verificadores são conferidos antes de sair para a rede.** Um dígito
+trocado voltaria como "não encontrado" depois de uma ida à internet e de gastar
+uma das três consultas do minuto; conferindo aqui, o erro é imediato e exato. A
+mesma checagem barra o CNPJ errado na gravação do cadastro — errado guardado
+volta como "não encontrado" toda vez que alguém tentar usá-lo.
+
+No modelo de ameaça (§2), a linha é: **revela em qual corretora o usuário tem
+conta, nunca o que ele tem lá.**
+
 ## 8. Módulo IR (`fisco.py`)
 
 Apuração mensal em **baldes que não se compensam entre si**:
@@ -588,6 +608,24 @@ usuário sai em ISO. `23/04/2026`, `07/2026`.
 
 Isso inclui os avisos que o `razao` e o `fisco` produzem — eles são texto de tela,
 ainda que nasçam em módulo de domínio.
+
+## 10.2 Tabelas ordenáveis
+
+Toda tabela sai do mesmo `tabela()`, então ordenar é um ponto só. Três decisões:
+
+**O cabeçalho é um `<button>` de verdade**, não um `<th>` com `onclick`: botão
+nativo já traz foco, Enter e Espaço, e `aria-sort` no `<th>` anuncia a ordem ao
+leitor de tela. A seta é reforço visual, não a informação.
+
+**A chave de ordenação não é o texto da célula.** A célula já vem formatada para
+leitura, e ordenar por ela poria `10/01/2026` antes de `05/12/2025` e
+`1.029,52` antes de `285`. `chaveDeOrdem()` reconhece data `dd/mm/aaaa`,
+competência `mm/aaaa` e número em pt-BR — incluindo o menos de `sinal()`, que é
+U+2212 e não o hífen do teclado.
+
+**Número vem antes de texto**, para que `—` e vazio não se misturem com valores.
+O `sort` do JS é estável, então linhas de mesma chave preservam a ordem em que
+vieram.
 
 ## 11. Relatórios (`relatorios.py`)
 

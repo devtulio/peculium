@@ -110,3 +110,89 @@ def test_relatorio_pela_ponte(api):
     assert {"posicao", "apuracao", "obrigacoes"} <= {r["chave"] for r in disponiveis}
     rel = dados(api.relatorio("posicao", {}))
     assert rel["colunas"][0] == "Ativo"
+
+
+# ------------------------------------------------------- cadastros editáveis
+
+def _cofre_com_cadastros(api):
+    dados(api.criar_cofre("senha mestra boa"))
+    inst = dados(api.cadastrar_instituicao({"nome": "Corretora Teste"}))["id"]
+    ativo = dados(api.cadastrar_ativo({"ticker": "PETR4", "classe": "ACAO"}))["id"]
+    return inst, ativo
+
+
+def test_editar_ativo_preserva_os_lancamentos(api):
+    """Renomear é seguro porque o lançamento aponta para o **id**, não o texto."""
+    inst, ativo = _cofre_com_cadastros(api)
+    dados(api.lancar({"data": "05/01/2026", "tipo": "COMPRA", "ativo": "PETR4",
+                      "instituicao": "Corretora Teste", "quantidade": 100,
+                      "preco": 30.0}))
+    dados(api.editar_ativo(ativo, {"ticker": "petr3", "nome": "Petrobras ON",
+                                   "classe": "ACAO"}))
+    carteira = dados(api.carteira())
+    assert len(carteira) == 1
+    assert carteira[0]["ticker"] == "PETR3"          # normaliza a caixa
+    assert carteira[0]["quantidade"] == 100          # o lançamento sobreviveu
+
+
+def test_editar_ativo_registra_a_troca_de_classe(api):
+    """A classe muda a alíquota do imposto: a auditoria guarda antes e depois."""
+    _inst, ativo = _cofre_com_cadastros(api)
+    dados(api.editar_ativo(ativo, {"ticker": "PETR4", "classe": "FII"}))
+    detalhe = api._conn.execute(
+        "SELECT detalhe FROM auditoria WHERE acao='ATIVO_EDITADO'").fetchone()[0]
+    assert "PETR4/ACAO" in detalhe and "PETR4/FII" in detalhe
+
+
+def test_editar_o_que_nao_existe_falha_com_explicacao(api):
+    dados(api.criar_cofre("senha mestra boa"))
+    for resposta in (api.editar_ativo(999, {"ticker": "X", "classe": "ACAO"}),
+                     api.editar_instituicao(999, {"nome": "X"})):
+        assert resposta["ok"] is False and "não existe" in resposta["erro"]
+
+
+def test_editar_instituicao_normaliza_o_cnpj(api):
+    inst, _ativo = _cofre_com_cadastros(api)
+    dados(api.editar_instituicao(inst, {"nome": "XP INVESTIMENTOS",
+                                        "cnpj": "02332886000104"}))
+    guardada = dados(api.cadastros())["instituicoes"][0]
+    assert (guardada["nome"], guardada["cnpj"]) == ("XP INVESTIMENTOS",
+                                                    "02.332.886/0001-04")
+
+
+def test_cnpj_errado_nao_entra_no_cadastro(api):
+    """Um dígito trocado viveria no cadastro e voltaria como "não encontrado"
+    toda vez que alguém tentasse usá-lo."""
+    dados(api.criar_cofre("senha mestra boa"))
+    resposta = api.cadastrar_instituicao({"nome": "Fantasma",
+                                          "cnpj": "02332886000105"})
+    assert resposta["ok"] is False and "CNPJ inválido" in resposta["erro"]
+    assert dados(api.cadastros())["instituicoes"] == []
+
+
+def test_instituicao_sem_cnpj_continua_valendo(api):
+    """O campo é opcional: exigir CNPJ para lançar uma compra seria atrito à toa."""
+    dados(api.criar_cofre("senha mestra boa"))
+    inst = dados(api.cadastrar_instituicao({"nome": "Corretora Teste"}))["id"]
+    dados(api.editar_instituicao(inst, {"nome": "Corretora Teste", "cnpj": ""}))
+    assert dados(api.cadastros())["instituicoes"][0]["cnpj"] is None
+
+
+def test_arquivar_nao_apaga_lancamento(api):
+    inst, ativo = _cofre_com_cadastros(api)
+    dados(api.lancar({"data": "05/01/2026", "tipo": "COMPRA", "ativo": "PETR4",
+                      "instituicao": "Corretora Teste", "quantidade": 100,
+                      "preco": 30.0}))
+    dados(api.editar_ativo(ativo, {"ativo": 0}))
+    assert dados(api.cadastros())["ativos"][0]["ativo"] == 0
+    assert len(dados(api.carteira())) == 1
+    assert len(dados(api.listar_lancamentos())) == 1
+
+
+def test_cnpj_da_importacao_ganha_mascara_na_leitura(api):
+    """A importação da B3 grava só os dígitos; a máscara é da leitura, senão
+    cada tela repetiria a regra de formatação."""
+    dados(api.criar_cofre("senha mestra boa"))
+    api._conn.execute("INSERT INTO instituicoes (nome, cnpj) VALUES (?,?)",
+                      ("XP INVESTIMENTOS", "02332886000104"))
+    assert dados(api.cadastros())["instituicoes"][0]["cnpj"] == "02.332.886/0001-04"

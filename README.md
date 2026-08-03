@@ -117,6 +117,10 @@ Quem furta o computador não passa do arquivo cifrado; não há porta de rede, e
 não há o que atacar pela rede local; e como o arquivo já é o cofre, guardá-lo em
 nuvem não expõe nada além do tamanho e da data.
 
+A busca de CNPJ segue a mesma contenção da cotação: host em constante de
+módulo, e **só o CNPJ digitado sai daqui**. Ela revela em qual corretora você tem
+conta, nunca o que você tem lá.
+
 Há um **apagamento geral** em Configurações, confirmado por frase digitada. Ele
 guarda uma cópia do cofre antes, fora do rodízio dos backups automáticos, e roda
 `VACUUM`: sem isso o `DELETE` deixaria os bytes apagados dentro do arquivo
@@ -148,6 +152,7 @@ protege o dado é o cofre.
 | `renda_fixa.py` | Título como ativo com PU: curva, posição e IR regressivo |
 | `series.py` | Séries do Banco Central, base da curva |
 | `cotacoes.py` | Cotação de fechamento, opcional |
+| `cnpj.py` | Razão social pelo CNPJ: ReceitaWS, BrasilAPI de reserva |
 | `relatorios.py` | Os dez relatórios, em HTML e CSV |
 
 Quatro dependências, justificadas uma a uma no [DESIGN.md](DESIGN.md#12-dependências-uma-a-uma).
