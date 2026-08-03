@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="16" height="16" role="img" aria-label="Peculium">
+  <title>Peculium — arte dedicada aos frames 32/24/16 px</title>
+  <!-- Capa + linum + sigillum são três elementos e a 32px viram um losango.
+       Sobram a capa e a letra. Capa escura com letra clara serve às duas barras
+       de tarefas: a massa aparece na clara, a letra aparece na escura. -->
+  <rect x="5" y="3" width="54" height="54" rx="5" fill="#63234c"/>
+  <rect x="9" y="58" width="46" height="3.6" rx="1.6" fill="#63234c"/>
+  <text x="32" y="47" text-anchor="middle" font-family="Georgia, serif" font-weight="bold"
+        font-size="40" fill="#ffffff">P</text>
+</svg>

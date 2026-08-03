@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Peculium">
+  <title>Peculium — tabulae ligatae (arte dos frames 48px+)</title>
+  <!-- capa de madeira do díptico fechado -->
+  <rect x="11" y="8" width="42" height="44" rx="2.5" fill="#63234c" stroke="#8d3f72" stroke-width="1"/>
+  <!-- margo: o bordo elevado que protegia a cera com as tabuinhas fechadas -->
+  <rect x="15" y="12" width="34" height="36" rx="1" fill="#533036"/>
+  <!-- corte das lâminas: o que faz ler "pilha de tabuinhas", não "caixa" -->
+  <rect x="12" y="51.4" width="40" height="2.4" rx=".9" fill="#4e1b3d"/>
+  <rect x="13" y="54.2" width="38" height="2.4" rx=".9" fill="#8d3f72"/>
+  <!-- linum: o cordão dava uma volta na peça; cruz lê embrulho de presente -->
+  <rect x="11" y="27.5" width="42" height="4" fill="#cfc4aa"/>
+  <!-- sigillum sobre o nó -->
+  <circle cx="32" cy="29.5" r="9" fill="#4a1a3a" stroke="#b08d3e" stroke-width="1.4"/>
+  <text x="32" y="35" text-anchor="middle" font-family="Georgia, serif" font-weight="bold"
+        font-size="12" fill="#e9e1d0">P</text>
+</svg>

@@ -1,0 +1,278 @@
+<meta charset="utf-8">
+<title>Peculium — estudo de selo v1</title>
+<style>
+  :root{
+    /* paleta fixa da marca — não muda com o tema */
+    --purpura:#63234c; --purpura-esc:#4a1a3a;
+    --argentum:#9aa3ab; --argentum-esc:#6f7880;
+    --aurum:#b08d3e;
+    --osso:#e8e0cf;
+    --tinta:#2b2115;
+    --pedra:#f4f1ea;
+  }
+  /* temas */
+  html[data-theme="atrium"]{ --bg:#f6f4ef; --surface:#fff; --surface2:#efece4; --text:#2a2622; --muted:#6b6459; --border:#ddd7cb; --accent:#63234c; --alta:#1a7f4b; --baixa:#a32020; --serif-val:system-ui; }
+  html[data-theme="cera"]{ --bg:#efe6d2; --surface:#f7f1e2; --surface2:#e8dcc2; --text:#33291b; --muted:#6a5c43; --border:#d8c9a8; --accent:#63234c; --alta:#1a6b42; --baixa:#8f2020; --serif-val:Georgia,serif; }
+  html[data-theme="aerarium"]{ --bg:#14121a; --surface:#1e1b25; --surface2:#272232; --text:#e8e3dc; --muted:#9d95a6; --border:#332d3f; --accent:#e0a94a; --alta:#3fd08a; --baixa:#ff7a6b; --serif-val:system-ui; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+  header{position:sticky;top:0;z-index:5;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;
+         padding:.9rem 1.4rem;background:var(--surface);border-bottom:1px solid var(--border)}
+  h1{font:600 1rem/1 system-ui;margin:0;letter-spacing:.02em}
+  .temas{display:flex;gap:.4rem;margin-left:auto}
+  .temas button{font:inherit;padding:.35rem .8rem;border:1px solid var(--border);background:var(--surface2);
+                color:var(--text);border-radius:999px;cursor:pointer}
+  .temas button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+  html[data-theme="aerarium"] .temas button[aria-pressed="true"]{color:#14121a}
+  main{max-width:1080px;margin:0 auto;padding:1.6rem 1.4rem 5rem}
+  section{margin:2.4rem 0}
+  h2{font:600 .78rem/1 system-ui;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+     margin:0 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.2rem}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem}
+  .card h3{font:600 1.05rem/1.2 Georgia,serif;margin:0 0 .2rem}
+  .card p{margin:.35rem 0 1rem;color:var(--muted);font-size:.86rem}
+  .sizes{display:flex;align-items:flex-end;gap:1.1rem;padding:1rem;background:var(--surface2);border-radius:8px}
+  .sizes figure{margin:0;text-align:center}
+  .sizes figcaption{font-size:.66rem;color:var(--muted);margin-top:.45rem;letter-spacing:.05em}
+  .wm{font-family:Georgia,serif;letter-spacing:.16em;font-weight:400}
+  .wm .v{color:var(--accent)}
+  .swatches{display:flex;flex-wrap:wrap;gap:.6rem}
+  .sw{width:126px;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-size:.7rem}
+  .sw div{height:46px}
+  .sw span{display:block;padding:.35rem .5rem;background:var(--surface);color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--border)}
+  th{font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--serif-val)}
+  .alta{color:var(--alta)} .baixa{color:var(--baixa)}
+  .nota{font-size:.82rem;color:var(--muted);margin-top:.8rem}
+  code{font-size:.85em;background:var(--surface2);padding:.1rem .3rem;border-radius:4px}
+</style>
+
+<header>
+  <h1>Peculium — estudo de selo v1</h1>
+  <div class="temas" role="group" aria-label="Tema">
+    <button data-t="atrium" aria-pressed="true">Atrium</button>
+    <button data-t="cera" aria-pressed="false">Cera</button>
+    <button data-t="aerarium" aria-pressed="false">Aerarium</button>
+  </div>
+</header>
+
+<main>
+
+<section>
+  <h2>1. Wordmark</h2>
+  <div class="card">
+    <div class="wm" style="font-size:2.6rem">PEC<span class="v">V</span>LI<span class="v">V</span>M</div>
+    <div class="wm" style="font-size:1.5rem;margin-top:1rem">PEC<span class="v">V</span>LI<span class="v">V</span>M</div>
+    <div class="wm" style="font-size:2.6rem;margin-top:1rem;opacity:.9">PECVLI<span class="v">V</span>M
+      <span style="font:.7rem/1 system-ui;letter-spacing:.1em;color:var(--muted);vertical-align:middle">← só o V final destacado</span></div>
+    <p style="margin-top:1.2rem">Divisa candidata, em epigrafia com interpontos:</p>
+    <div class="wm" style="font-size:1.05rem">S<span class="v">VV</span>M · C<span class="v">V</span>IQ<span class="v">V</span>E</div>
+    <div class="wm" style="font-size:1.05rem;margin-top:.4rem;color:var(--muted)">DE · PEC<span class="v">V</span>LIO</div>
+    <p class="nota"><b>SVVM CVIQVE</b> = "a cada um o que é seu", terceiro preceito do direito em Ulpiano
+      (D.1.1.10: <i>honeste vivere, alterum non laedere, suum cuique tribuere</i>). <b>DE PECVLIO</b> = título
+      do Digesto 15.1, que rege o instituto. O primeiro é divisa; o segundo, citação.</p>
+  </div>
+</section>
+
+<section>
+  <h2>2. Direções de ícone — cada uma nos tamanhos reais do .ico</h2>
+  <div class="cards">
+
+    <div class="card">
+      <h3>A — Arca</h3>
+      <p>Cofre doméstico romano: caixa de madeira cintada em ferro, tachas de bronze, ferrolho central.
+         Ficava no átrio da <i>domus</i>, acorrentada ao piso — era o objeto físico do patrimônio da casa.</p>
+      <div class="sizes">
+        <figure><svg width="128" height="128" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="9" y="24" width="46" height="30" rx="2" fill="var(--purpura)"/>
+          <rect x="7" y="17" width="50" height="9" rx="2" fill="var(--purpura-esc)"/>
+          <g fill="var(--argentum)">
+            <rect x="16" y="17" width="4" height="37"/><rect x="44" y="17" width="4" height="37"/>
+            <rect x="27" y="17" width="10" height="37"/>
+          </g>
+          <rect x="7" y="30" width="50" height="3" fill="var(--argentum-esc)" opacity=".55"/>
+          <circle cx="32" cy="37" r="4.6" fill="var(--aurum)"/>
+          <rect x="30.6" y="37" width="2.8" height="7" fill="var(--aurum)"/>
+          <g fill="var(--aurum)" opacity=".8">
+            <circle cx="12" cy="21.5" r="1.4"/><circle cx="52" cy="21.5" r="1.4"/>
+            <circle cx="12" cy="49" r="1.4"/><circle cx="52" cy="49" r="1.4"/>
+          </g>
+          <rect x="11" y="54" width="6" height="4" fill="var(--purpura-esc)"/>
+          <rect x="47" y="54" width="6" height="4" fill="var(--purpura-esc)"/>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="9" y="24" width="46" height="30" rx="2" fill="var(--purpura)"/>
+          <rect x="7" y="17" width="50" height="9" rx="2" fill="var(--purpura-esc)"/>
+          <rect x="27" y="17" width="10" height="37" fill="var(--argentum)"/>
+          <circle cx="32" cy="37" r="4.6" fill="var(--aurum)"/>
+          <rect x="30.6" y="37" width="2.8" height="7" fill="var(--aurum)"/>
+        </svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="8" y="23" width="48" height="32" rx="2" fill="var(--purpura)"/>
+          <rect x="6" y="15" width="52" height="10" rx="2" fill="var(--purpura-esc)"/>
+          <rect x="26" y="15" width="12" height="40" fill="var(--argentum)"/>
+          <circle cx="32" cy="36" r="5" fill="var(--aurum)"/>
+        </svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="6" y="22" width="52" height="34" rx="2" fill="var(--purpura)"/>
+          <rect x="4" y="12" width="56" height="12" rx="2" fill="var(--purpura-esc)"/>
+          <rect x="25" y="12" width="14" height="44" fill="#f4f1ea"/>
+        </svg><figcaption>16 (arte dedicada)</figcaption></figure>
+      </div>
+      <p class="nota"><b>Risco honesto:</b> baú/cofre é silhueta comum em app de backup e de cofre de senhas.
+         Ganha em leitura imediata, perde em unicidade.</p>
+    </div>
+
+    <div class="card">
+      <h3>B — Tessera nummularia</h3>
+      <p>Etiqueta de osso presa ao saco de moedas pelo <i>nummularius</i> (o conferidor), inscrita com nome,
+         data consular e a fórmula <b>SPECTAVIT</b> — "conferiu". Centenas sobrevivem, datadas. É, literalmente,
+         a etiqueta romana de ativo verificado.</p>
+      <div class="sizes">
+        <figure><svg width="128" height="128" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="6" y="20" width="52" height="24" rx="4" fill="var(--osso)" stroke="var(--tinta)" stroke-width="1.6"/>
+          <circle cx="14" cy="32" r="3.4" fill="var(--bg)" stroke="var(--tinta)" stroke-width="1.4"/>
+          <g stroke="var(--purpura)" stroke-width="2.2" stroke-linecap="round">
+            <path d="M23 27h29"/><path d="M23 32h23"/><path d="M23 37h26"/>
+          </g>
+          <path d="M6 44h52" stroke="var(--aurum)" stroke-width="2" opacity=".7"/>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="6" y="20" width="52" height="24" rx="4" fill="var(--osso)" stroke="var(--tinta)" stroke-width="2"/>
+          <circle cx="14" cy="32" r="3.4" fill="var(--bg)" stroke="var(--tinta)" stroke-width="1.6"/>
+          <g stroke="var(--purpura)" stroke-width="2.6" stroke-linecap="round">
+            <path d="M23 27h29"/><path d="M23 37h26"/>
+          </g>
+        </svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="4" y="18" width="56" height="28" rx="5" fill="var(--osso)" stroke="var(--tinta)" stroke-width="2.6"/>
+          <circle cx="14" cy="32" r="4" fill="var(--bg)" stroke="var(--tinta)" stroke-width="2.2"/>
+          <g stroke="var(--purpura)" stroke-width="3.4" stroke-linecap="round"><path d="M24 26h28"/><path d="M24 38h24"/></g>
+        </svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="2" y="16" width="60" height="32" rx="6" fill="var(--purpura)"/>
+          <circle cx="14" cy="32" r="5" fill="#f4f1ea"/>
+          <g stroke="#f4f1ea" stroke-width="5" stroke-linecap="round"><path d="M26 25h26"/><path d="M26 39h20"/></g>
+        </svg><figcaption>16 (arte dedicada)</figcaption></figure>
+      </div>
+      <p class="nota"><b>Risco honesto:</b> a 16 px vira "etiqueta genérica" e o furo some se a arte não for
+         redesenhada (por isso a versão sólida invertida acima).</p>
+    </div>
+
+    <div class="card">
+      <h3>C — Statera</h3>
+      <p>A balança romana de braço desigual e contrapeso deslizante — invenção romana que em português
+         ainda se chama <b>"balança romana"</b>. Pesa-se o patrimônio movendo o peso pela haste graduada;
+         é também o atributo de <i>Aequitas</i> nas moedas imperiais.</p>
+      <div class="sizes">
+        <figure><svg width="128" height="128" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M22 8v6" stroke="var(--argentum-esc)" stroke-width="2"/>
+          <circle cx="22" cy="7" r="4" fill="none" stroke="var(--aurum)" stroke-width="2.4"/>
+          <rect x="7" y="20" width="50" height="4.5" rx="2" fill="var(--purpura)"/>
+          <path d="M22 14v6" stroke="var(--argentum-esc)" stroke-width="2.6"/>
+          <g stroke="var(--argentum-esc)" stroke-width="1.6" fill="none">
+            <path d="M12 24.5v6"/><path d="M12 30.5 6 36h12l-6-5.5Z" fill="var(--argentum)"/>
+          </g>
+          <path d="M45 24.5v5" stroke="var(--argentum-esc)" stroke-width="2"/>
+          <path d="M45 29c-5 0-7 4-7 8s3 8 7 8 7-4 7-8-2-8-7-8Z" fill="var(--aurum)"/>
+          <g stroke="var(--purpura-esc)" stroke-width="1.4" opacity=".75">
+            <path d="M28 20v4.5"/><path d="M34 20v4.5"/><path d="M40 20v4.5"/><path d="M52 20v4.5"/>
+          </g>
+        </svg><figcaption>128</figcaption></figure>
+        <figure><svg width="48" height="48" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="22" cy="7" r="4" fill="none" stroke="var(--aurum)" stroke-width="3"/>
+          <path d="M22 11v9" stroke="var(--argentum-esc)" stroke-width="3"/>
+          <rect x="7" y="20" width="50" height="5" rx="2.5" fill="var(--purpura)"/>
+          <path d="M12 25v5.5 M12 30.5 6 36h12l-6-5.5Z" fill="var(--argentum)" stroke="var(--argentum-esc)" stroke-width="1.8"/>
+          <path d="M45 29c-5 0-7 4-7 8s3 8 7 8 7-4 7-8-2-8-7-8Z" fill="var(--aurum)"/>
+        </svg><figcaption>48</figcaption></figure>
+        <figure><svg width="32" height="32" viewBox="0 0 64 64" aria-hidden="true">
+          <circle cx="22" cy="7" r="4.5" fill="none" stroke="var(--aurum)" stroke-width="4"/>
+          <path d="M22 12v8" stroke="var(--purpura)" stroke-width="4"/>
+          <rect x="5" y="20" width="54" height="6" rx="3" fill="var(--purpura)"/>
+          <path d="M12 26v4 M12 30 5 37h14l-7-7Z" fill="var(--argentum)" stroke="var(--argentum-esc)" stroke-width="2.4"/>
+          <path d="M45 28c-6 0-8 5-8 9s4 9 8 9 8-5 8-9-2-9-8-9Z" fill="var(--aurum)"/>
+        </svg><figcaption>32</figcaption></figure>
+        <figure><svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M24 6v14" stroke="var(--purpura)" stroke-width="6"/>
+          <rect x="2" y="20" width="60" height="8" rx="4" fill="var(--purpura)"/>
+          <path d="M14 28 4 40h20L14 28Z" fill="var(--purpura)"/>
+          <ellipse cx="46" cy="42" rx="10" ry="12" fill="var(--purpura)"/>
+        </svg><figcaption>16 (arte dedicada)</figcaption></figure>
+      </div>
+      <p class="nota"><b>Risco honesto:</b> balança lê como "justiça/jurídico" — e você já tem um sistema de
+         Procuradoria. A assimetria da statera afasta do ícone de balança de pratos iguais, mas não elimina.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Marca de apresentação — a arca no exergo (aplicada à direção A)</h2>
+  <div class="card" style="text-align:center;padding:2.4rem">
+    <svg width="260" height="230" viewBox="0 0 130 115" aria-hidden="true">
+      <rect x="34" y="26" width="62" height="40" rx="2" fill="var(--purpura)"/>
+      <rect x="31" y="16" width="68" height="12" rx="2" fill="var(--purpura-esc)"/>
+      <g fill="var(--argentum)"><rect x="43" y="16" width="5" height="50"/><rect x="82" y="16" width="5" height="50"/>
+        <rect x="58" y="16" width="14" height="50"/></g>
+      <circle cx="65" cy="42" r="6" fill="var(--aurum)"/><rect x="63.2" y="42" width="3.6" height="9" fill="var(--aurum)"/>
+      <rect x="37" y="66" width="8" height="5" fill="var(--purpura-esc)"/><rect x="85" y="66" width="8" height="5" fill="var(--purpura-esc)"/>
+      <rect x="18" y="71" width="94" height="3" fill="var(--aurum)"/>
+      <text x="65" y="88" text-anchor="middle" font-family="Georgia,serif" font-size="13"
+            letter-spacing="2.6" fill="var(--text)">PECVLIVM</text>
+      <text x="65" y="99" text-anchor="middle" font-family="Georgia,serif" font-size="6.2"
+            letter-spacing="1.8" fill="var(--muted)">SVVM · CVIQVE</text>
+      <path d="M30 104h70" stroke="var(--border)" stroke-width="1"/>
+      <text x="65" y="112" text-anchor="middle" font-family="Georgia,serif" font-size="6"
+            letter-spacing="2.4" fill="var(--muted)">MMXXVI</text>
+    </svg>
+    <p class="nota" style="max-width:44ch;margin:1rem auto 0">Mesma gramática do estandarte do Licitarium:
+      artefato acima da linha, nome e divisa no campo, ano de fundação no <b>exergo</b> (o espaço sob a linha
+      de base onde a casa da moeda gravava a marca). MMXXVI é fixo, não acompanha versão.</p>
+  </div>
+</section>
+
+<section>
+  <h2>4. Paleta da marca (fixa nos três temas)</h2>
+  <div class="swatches">
+    <div class="sw"><div style="background:#63234c"></div><span>Púrpura tíria<br>#63234c</span></div>
+    <div class="sw"><div style="background:#4a1a3a"></div><span>Púrpura escura<br>#4a1a3a</span></div>
+    <div class="sw"><div style="background:#9aa3ab"></div><span>Argentum<br>#9aa3ab</span></div>
+    <div class="sw"><div style="background:#b08d3e"></div><span>Aurum<br>#b08d3e</span></div>
+    <div class="sw"><div style="background:#e8e0cf"></div><span>Osso<br>#e8e0cf</span></div>
+    <div class="sw"><div style="background:#2b2115"></div><span>Tinta<br>#2b2115</span></div>
+  </div>
+  <p class="nota">A púrpura é o <i>murex</i> tírio — tinta de molusco, a cor mais cara do mundo romano e
+    reservada por lei ao patrimônio da elite. Escolhida por ser <b>neutra em relação a ganho e perda</b>:
+    verde ou vermelho como cor de marca brigaria com o significado deles na tela.</p>
+</section>
+
+<section>
+  <h2>5. Alta e baixa — o ponto duro de acessibilidade</h2>
+  <div class="card">
+    <table>
+      <tr><th>Ativo</th><th>Posição</th><th style="text-align:right">Preço médio</th><th style="text-align:right">Atual</th><th style="text-align:right">Resultado</th></tr>
+      <tr><td>PETR4</td><td>300</td><td class="num">32,18</td><td class="num">38,04</td><td class="num alta">▲ +18,21%</td></tr>
+      <tr><td>MXRF11</td><td>1.240</td><td class="num">10,42</td><td class="num">9,87</td><td class="num baixa">▼ −5,28%</td></tr>
+      <tr><td>Tesouro IPCA+ 2035</td><td>2,4</td><td class="num">3.108,55</td><td class="num">3.402,90</td><td class="num alta">▲ +9,47%</td></tr>
+      <tr><td>CDB Banco X 112% CDI</td><td>—</td><td class="num">10.000,00</td><td class="num">11.284,33</td><td class="num alta">▲ +12,84%</td></tr>
+    </table>
+    <p class="nota"><b>Regra fechada:</b> nunca só cor. Sinal (+/−) <b>e</b> seta (▲/▼) <b>e</b> valor — a cor é
+      reforço, não informação. Deuteranopia é ~8% dos homens, e verde/vermelho é justamente o par que ela
+      colapsa. Config <code>paleta daltônica</code> troca o par por azul/laranja mantendo contraste AA.
+      Números em <code>tabular-nums</code> para alinhar coluna de dinheiro.</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+  document.querySelectorAll('.temas button').forEach(b => b.addEventListener('click', () => {
+    document.documentElement.dataset.theme = b.dataset.t;
+    document.querySelectorAll('.temas button').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  }));
+  document.documentElement.dataset.theme = 'atrium';
+</script>

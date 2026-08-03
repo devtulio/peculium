@@ -1,0 +1,54 @@
+# ============================================================================
+# Peculium — o repositório é PÚBLICO e guarda código, nunca dado.
+# Arquivo commitado por acidente fica no histórico do Git para sempre: remover
+# depois exige reescrever o histórico e force-push. Bloquear antes é a única
+# defesa barata.
+# ============================================================================
+
+# O cofre e qualquer banco
+*.pec
+*.pec.*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.lock
+
+# Documentos que o usuário importa: nota de corretagem, extrato, planilha.
+# Contêm CPF, número de conta e a carteira inteira.
+*.pdf
+*.xlsx
+*.xlsm
+*.xls
+*.csv
+*.tsv
+*.ofx
+*.qif
+
+# Saída de relatório (o HTML gerado tem a carteira real dentro)
+/saida/
+carteira*.html
+relatorio*.html
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+
+# Playwright (E2E, quando existir)
+node_modules/
+test-results/
+playwright-report/
+
+# Editor / SO
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Codex accepti et expensi">
+  <title>Peculium — codex accepti et expensi</title>
+  <!-- molduras de madeira, margo elevado -->
+  <rect x="4"  y="12" width="27" height="40" rx="2" fill="#63234c"/>
+  <rect x="33" y="12" width="27" height="40" rx="2" fill="#63234c"/>
+  <rect x="4"  y="12" width="27" height="40" rx="2" fill="none" stroke="#8d3f72" stroke-width=".9"/>
+  <rect x="33" y="12" width="27" height="40" rx="2" fill="none" stroke="#8d3f72" stroke-width=".9"/>
+  <!-- campo de cera enegrecida -->
+  <rect x="7.5"  y="15.5" width="20" height="33" fill="#332a1a"/>
+  <rect x="36.5" y="15.5" width="20" height="33" fill="#332a1a"/>
+  <!-- incisões: descrição à esquerda, valor alinhado à direita (accepti | expensi) -->
+  <g stroke="#e9e1d0" stroke-width="1.3" stroke-linecap="round">
+    <path d="M10 21h9"/>   <path d="M21.5 21h4.5"/>
+    <path d="M10 27h11"/>  <path d="M22.5 27h3.5"/>
+    <path d="M10 33h8"/>   <path d="M20.5 33h5.5"/>
+    <path d="M10 39h10"/>  <path d="M22 39h4"/>
+    <path d="M39 21h9"/>   <path d="M50.5 21h4.5"/>
+    <path d="M39 27h7"/>   <path d="M49 27h6"/>
+    <path d="M39 33h10"/>  <path d="M51 33h4"/>
+  </g>
+  <!-- linha de fecho de cada face -->
+  <g stroke="#b08d3e" stroke-width="1.1" stroke-linecap="round" opacity=".9">
+    <path d="M10 45h16"/><path d="M39 39h16"/>
+  </g>
+  <!-- dobradiça: anéis de bronze nos furos da borda interna -->
+  <rect x="31" y="12" width="2" height="40" fill="#4a1a3a"/>
+  <g fill="none" stroke="#b08d3e" stroke-width="1.8">
+    <path d="M31 21a2.6 2.6 0 0 0 2 0"/><path d="M31 32a2.6 2.6 0 0 0 2 0"/><path d="M31 43a2.6 2.6 0 0 0 2 0"/>
+  </g>
+  <!-- estilete: ponta afiada embaixo, espátula de apagar em cima -->
+  <g transform="rotate(24 50 34)">
+    <rect x="48.6" y="8" width="2.8" height="26" rx="1.2" fill="#9aa3ab"/>
+    <path d="M48.6 34 50 39l1.4-5Z" fill="#6f7880"/>
+    <path d="M47.6 8h4.8l-.9-4.4h-3Z" fill="#6f7880"/>
+  </g>
+</svg>
