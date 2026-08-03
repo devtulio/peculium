@@ -3,6 +3,31 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] — 2026-08-03
+
+### Notas de renda fixa
+
+Fecha a renda fixa: o título deixa de precisar de cadastro à mão.
+
+- Leitores de **nota de renda fixa em PDF**, um por corretora — XP e Inter.
+  Diferente da renda variável, onde quase toda corretora usa o mesmo layout do
+  Sinacor, aqui **cada uma inventa a sua**, e as duas não têm uma linha em comum.
+- Importar a nota **cadastra o papel e lança a aplicação de uma vez**, com
+  emissor, indexador, taxa, emissão, vencimento e o preço unitário certo — que
+  era justamente o dado difícil do cadastro manual.
+- Arquivo de corretora ainda não suportada é **recusado com essa explicação**, em
+  vez de ser lido pela metade.
+- Dois invariantes barram a nota que não fecha: quantidade × preço unitário tem
+  de dar o valor bruto, e bruto − IR − IOF tem de dar o líquido.
+
+### Proteção contra fusão de papéis
+
+Uma nota real da Inter identificava o título apenas como `3`. Usar isso como
+código faria **qualquer outro papel também numerado `3` fundir-se com ele** —
+duas aplicações diferentes virariam uma posição só, sem aviso. Quando o código
+da nota não identifica o papel, o programa deriva um do nome e do vencimento e
+marca a linha como **derivado** na conferência.
+
 ## [0.2.0] — 2026-08-03
 
 ### Renda fixa e Tesouro Direto
@@ -125,6 +150,7 @@ operacionais e rentabilidade por XIRR. Saída em HTML timbrado e CSV.
 - **Rede desligada por padrão.** Com a cotação ligada, só o ticker sai daqui.
 - **Datas guardadas em ISO, mostradas em `dd/mm/aaaa`.**
 
+[0.3.0]: https://github.com/devtulio/peculium/releases/tag/v0.3.0
 [0.2.0]: https://github.com/devtulio/peculium/releases/tag/v0.2.0
 [0.1.1]: https://github.com/devtulio/peculium/releases/tag/v0.1.1
 [0.1.0]: https://github.com/devtulio/peculium/releases/tag/v0.1.0

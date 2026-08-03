@@ -47,14 +47,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.2.0', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.3.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.2.0' })
+        ? ok({ config, versao: '0.3.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.2.0' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.3.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -137,8 +137,25 @@
       relatorio: () => ok(RELATORIO),
       salvar_relatorio: () => ok({ salvo: true, caminho: 'C:\\mock\\relatorio.html' }),
 
-      escolher_arquivo: () => ok('C:\\mock\\2026 07 21 NOTA 140560283.pdf'),
-      importar: () => ok({
+      // ?rf=1 faz a importação devolver uma nota de renda fixa
+      escolher_arquivo: () => ok('C:\\mock\\nota.pdf'),
+      importar: () => (new URLSearchParams(location.search).has('rf') ? ok({
+        token: 'imp1', origem: 'NOTA_RF',
+        avisos: ['CDB-CREDITO-2029-07-01: a nota não trouxe um código utilizável.'],
+        notas: [
+          { numero: '119312735', corretora: 'XP INVESTIMENTOS', situacao: 'CRIA',
+            motivo: 'título novo: entra o cadastro e a aplicação',
+            data: '14/05/2026', ticker: 'CDB5267UW6V', codigo_ambiguo: false,
+            nome: 'CDB BANCO XP', emissor: 'BANCO XP S.A.', indexador: 'CDI',
+            taxa: 100, vencimento: '15/05/2028', quantidade: 1000, pu: 1,
+            bruto: 1000, ir: 0 },
+          { numero: '662299618', corretora: 'BANCO INTER', situacao: 'CRIA',
+            motivo: 'título novo: entra o cadastro e a aplicação',
+            data: '16/07/2026', ticker: 'CDB-CREDITO-2029-07-01',
+            codigo_ambiguo: true, nome: 'CDB CREDITO', emissor: 'BANCO INTER',
+            indexador: 'CDI', taxa: 80, vencimento: '01/07/2029',
+            quantidade: 50000, pu: 0.01, bruto: 500, ir: 0 }],
+      }) : ok({
         token: 'imp1', origem: 'NOTA',
         nota: { numero: '140560283', corretora: 'CORRETORA FICTÍCIA',
                 data: '21/07/2026', operacoes: 997.5, custos: 11.71, liquido: 1009.21 },
@@ -151,8 +168,11 @@
           { situacao: 'CRIA', especificacao: 'FII MAXI REN MXRF11 CI', ticker: 'MXRF11',
             motivo: 'sem contraparte na B3: a nota cria o negócio',
             sentido: 'COMPRA', quantidade: 100, preco: 9.71, custos: 2.2 }],
-      }),
-      confirmar_importacao: () => ok({ criados: 2, enriquecidos: 0 }),
+      })),
+      confirmar_importacao: () =>
+        (new URLSearchParams(location.search).has('rf')
+          ? ok({ lancamentos: 2, titulos: 2, ja_importadas: 0 })
+          : ok({ criados: 2, enriquecidos: 0 })),
     },
   };
 

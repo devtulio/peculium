@@ -34,7 +34,9 @@ emolumentos, e sem eles o preço médio nasce errado — e o imposto atrás dele
 - **Importação da B3** — relatórios de Negociação e Movimentação (CSV e XLSX),
   idempotentes: reimportar períodos que se sobrepõem é o caso normal.
 - **Notas de corretagem** — leitura do PDF no layout Sinacor, com rateio dos
-  custos e reconciliação com o que já veio da bolsa, sem duplicar negócio.
+  custos e reconciliação com o que já veio da bolsa, sem duplicar negócio. Para
+  **renda fixa** há um leitor por corretora (XP e Inter), porque cada uma inventa
+  o próprio layout — e importar a nota cadastra o papel e lança a aplicação junto.
 - **Renda fixa e Tesouro** — CDB, LCI, LCA e Tesouro Direto com **valor na curva**
   calculado das séries do Banco Central. IPCA+ pede preço à mão, porque depende do
   VNA oficial — e preço digitado sempre vence o calculado.

@@ -21,6 +21,7 @@ import esquema
 import fisco
 import importar_b3
 import importar_nota
+import importar_nota_rf
 import lancamentos
 import obrigacoes
 import razao
@@ -29,7 +30,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.2.0"
+VERSAO = "0.3.0"
 
 
 def raiz() -> Path:
@@ -420,9 +421,28 @@ class Api:
         token = f"imp{len(self._conferencias) + 1}"
         if alvo.suffix.lower() == ".pdf":
             config = self._config()
-            nota = importar_nota.ler(
+            texto = importar_nota.ler_texto(
                 alvo, cpf=config.get("cpf") or None,
                 senhas=tuple(s for s in (config.get("senhas_pdf") or "").split(",") if s))
+            if importar_nota_rf.e_renda_fixa(texto):
+                notas = importar_nota_rf.parsear(texto)
+                conferencia = importar_nota_rf.conferir(self._conn, notas)
+                self._conferencias[token] = ("NOTA_RF", conferencia)
+                return {
+                    "token": token, "origem": "NOTA_RF",
+                    "avisos": conferencia.avisos,
+                    "notas": [{
+                        "numero": i.nota.numero, "corretora": i.nota.corretora,
+                        "situacao": i.situacao, "motivo": i.motivo,
+                        "data": textos.data_br(i.nota.data), "ticker": i.nota.ticker,
+                        "codigo_ambiguo": i.nota.codigo_ambiguo,
+                        "nome": i.nota.nome, "emissor": i.nota.emissor,
+                        "indexador": i.nota.indexador, "taxa": i.nota.taxa,
+                        "vencimento": textos.data_br(i.nota.vencimento),
+                        "quantidade": i.nota.quantidade, "pu": i.nota.pu,
+                        "bruto": i.nota.valor_bruto, "ir": i.nota.ir,
+                    } for i in conferencia.itens]}
+            nota = importar_nota.parsear(texto)
             conferencia = importar_nota.conferir(self._conn, nota)
             self._conferencias[token] = ("NOTA", conferencia)
             return {"token": token, "origem": "NOTA",
@@ -457,7 +477,9 @@ class Api:
     def confirmar_importacao(self, token: str, tickers: dict | None = None,
                              classes: dict | None = None) -> dict:
         origem, conferencia = self._conferencias.pop(token)
-        if origem == "NOTA":
+        if origem == "NOTA_RF":
+            resumo = importar_nota_rf.gravar(self._conn, conferencia)
+        elif origem == "NOTA":
             resumo = importar_nota.gravar(self._conn, conferencia, tickers, classes)
         else:
             resumo = {"gravadas": importar_b3.gravar(self._conn, conferencia, classes)}

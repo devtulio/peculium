@@ -484,7 +484,38 @@ async function verImportar() {
     const caminho = await tentar(() => api('escolher_arquivo'));
     if (!caminho) return;
     const c = await tentar(() => api('importar', caminho));
-    (c.origem === 'NOTA' ? conferirNota : conferirB3)(c);
+    ({ NOTA: conferirNota, NOTA_RF: conferirNotaRF, B3: conferirB3 })[c.origem](c);
+  });
+}
+
+function conferirNotaRF(c) {
+  const novas = c.notas.filter(n => n.situacao === 'CRIA');
+  $('#conferencia').innerHTML = `
+    <div class="bloco" style="margin-top:1rem">
+      <h3>Nota${c.notas.length > 1 ? 's' : ''} de renda fixa</h3>
+      ${listaAvisos(c.avisos)}
+      ${tabela(['Nota', 'Situação', 'Data', 'Título', 'Emissor', 'Indexador',
+                'Vencimento', 'Quantidade', 'PU', 'Bruto'],
+        c.notas.map(n => [
+          esc(n.numero),
+          `<span class="selo-situacao ${n.situacao === 'CRIA' ? 'ok' : ''}">${n.situacao}</span>`,
+          esc(n.data),
+          esc(n.ticker) + (n.codigo_ambiguo
+            ? ' <span class="selo-situacao grave" title="a nota não trouxe um código utilizável; o ticker foi derivado do nome e do vencimento">derivado</span>'
+            : ''),
+          esc(n.emissor), `${esc(n.indexador)} ${n.taxa}%`, esc(n.vencimento),
+          qtd(n.quantidade), brl(n.pu), brl(n.bruto)]),
+        { numericas: [7, 8, 9] })}
+      <menu style="display:flex;gap:.6rem;justify-content:flex-end;padding:0">
+        <button type="button" class="primario" id="btn-gravar-rf"
+          ${novas.length ? '' : 'disabled'}>Gravar ${novas.length} aplicação(ões)</button>
+      </menu>
+    </div>`;
+  const gravar = $('#btn-gravar-rf');
+  if (gravar) gravar.addEventListener('click', async () => {
+    const r = await tentar(() => api('confirmar_importacao', c.token));
+    toast(`${r.lancamentos} lançamento(s) e ${r.titulos} título(s) cadastrado(s)`);
+    irPara('carteira');
   });
 }
 

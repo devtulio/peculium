@@ -150,6 +150,25 @@ test.describe('renda fixa', () => {
   });
 });
 
+test.describe('nota de renda fixa', () => {
+  test('conferência mostra o papel e marca o ticker derivado', async ({ page }) => {
+    await page.goto('/index.html?mock=1&rf=1&tema=atrium');
+    await page.fill('#senha', 'mock');
+    await page.click('#form-abrir button[type="submit"]');
+    await page.click('#menu button[data-view="importar"]');
+    await page.click('#btn-escolher');
+
+    await expect(page.locator('#conferencia')).toContainText('Notas de renda fixa');
+    await expect(page.locator('#conferencia')).toContainText('CDB5267UW6V');
+    await expect(page.locator('#conferencia')).toContainText('CDI 100%');
+    // o papel cujo código a nota não trouxe fica sinalizado
+    await expect(page.locator('.selo-situacao.grave')).toContainText('derivado');
+
+    await page.click('#btn-gravar-rf');
+    await expect(page.locator('#toast')).toContainText('título(s) cadastrado(s)');
+  });
+});
+
 test.describe('impostos', () => {
   test('DARF vencido aparece com multa e oferta de pagamento', async ({ page }) => {
     await destrancar(page);

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.2.0</title>
+<title>Manual Operacional — Peculium v0.3.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.2.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.3.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.2.0</div>
+  <div class="versao">VERSÃO 0.3.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.2.0.exe" --verificar</pre>
+<pre>"Peculium v0.3.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -222,7 +222,12 @@ a aplicação é uma compra e o resgate é uma venda. Com isso, quantidade, cust
 posição funcionam igual ao resto da carteira.</p>
 
 <h3>Cadastrar o título</h3>
-<p>Primeiro crie o ativo em <strong>Configurações → Cadastros</strong> com a classe
+
+<p>O caminho curto é <strong>importar a nota de renda fixa</strong> (seção 7): ela
+traz emissor, indexador, taxa, emissão, vencimento e o preço unitário, e o
+programa cadastra o papel e a aplicação de uma vez.</p>
+
+<p>À mão, primeiro crie o ativo em <strong>Configurações → Cadastros</strong> com a classe
 <strong>RF</strong> ou <strong>TESOURO</strong>. O ticker pode ser o código que
 aparece na nota, como <code>CDB5267UW6V</code>. Depois, em
 <strong>Carteira → Novo título de renda fixa</strong>, informe emissão,
@@ -327,6 +332,28 @@ acrescenta os custos, estornando o lançamento antigo e gravando o corrigido.</p
 <p>Notas protegidas por senha: informe seu CPF em Configurações e o programa tenta
 as variações usuais (três primeiros dígitos, três últimos, seis primeiros, CPF
 inteiro). Se a sua corretora usa outra senha, cadastre-a no campo ao lado.</p>
+
+<h3>Notas de renda fixa</h3>
+
+<p>Cada corretora inventa o próprio layout para renda fixa — XP e Inter não têm
+uma linha em comum, e nenhuma delas se parece com a nota de renda variável. Por
+isso o programa tem um leitor por corretora, escolhido pelo conteúdo do arquivo.
+Arquivo de corretora ainda não suportada é recusado com essa explicação, em vez
+de ser lido pela metade.</p>
+
+<p>A nota de renda fixa <strong>não tem custos operacionais</strong>: o que ela
+traz de valioso são os dados do papel. Ao importar, o título é cadastrado e a
+aplicação lançada de uma vez, com o preço unitário certo.</p>
+
+<div class="aviso">
+  <strong>Às vezes a nota não traz um código utilizável.</strong> Uma nota real
+  da Inter identificava o papel apenas como <code>3</code>. Usar isso como código
+  faria qualquer outro papel também numerado <code>3</code> fundir-se com ele —
+  duas aplicações diferentes virariam uma posição só, sem aviso. Nesses casos o
+  programa deriva um código do nome e do vencimento e marca a linha como
+  <strong>derivado</strong> na conferência. Você pode renomear depois em
+  Cadastros.
+</div>
 
 <h2 id="impostos">8. Imposto de renda e contas a pagar</h2>
 
