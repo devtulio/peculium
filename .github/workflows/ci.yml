@@ -56,6 +56,10 @@ jobs:
   executavel:
     runs-on: windows-latest
     needs: [testes, e2e]
+    # O GITHUB_TOKEN padrão é somente-leitura para conteúdo: sem isto, anexar o
+    # executável ao release devolve 403 "Resource not accessible by integration".
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
