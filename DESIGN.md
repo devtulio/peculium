@@ -361,6 +361,24 @@ DARF), `PENDENTE`, `VENCIDO`, `PAGO`, `PARCIAL`, `A_MAIOR`.
   exatamente o que este programa não faz.
 - `a_vencer()` alimenta o alerta do painel: o que vence na janela mais o vencido.
 
+## 8.2 Entrada manual (`lancamentos.py`)
+
+Único caminho de escrita no razão fora dos importadores. Existe para a validação
+não ficar espalhada na tela — e porque `eventos` estava implementado no razão e
+**inalcançável**: não havia como cadastrar um desdobramento.
+
+- Aceita data em ISO ou `dd/mm/aaaa`, e **recusa data futura**: lançamento no
+  futuro corrompe em silêncio toda pergunta sobre "a posição hoje".
+- Aceita ativo por ticker ou id, instituição por nome ou id; o que não existe
+  falha nomeando o campo, não com erro de chave estrangeira.
+- **Toda gravação deixa linha em `auditoria`** — tabela que existia sem ninguém
+  escrever nela.
+- `estornar()` recusa estornar duas vezes e recusa estornar um estorno.
+- Evento não tem estorno: quem erra o fator remove o cadastro (a remoção fica na
+  auditoria). Evento é fato da companhia, não do usuário.
+- Um teste amarra a lista de tipos aceitos aqui à que o `razao` sabe processar —
+  as duas divergirem seria um lançamento gravável e inapurável.
+
 ## 9. Processo e ponte Python↔UI
 
 ```python
@@ -455,6 +473,7 @@ Peculium/
   cofre.py             # formato do .pec, KDF, envelope de chaves, gravação atômica
   esquema.py           # DDL do banco, aplicada dentro do cofre
   textos.py            # número e data em pt-BR, comuns aos importadores
+  lancamentos.py       # entrada manual: validação, estorno, evento, auditoria
   razao.py             # motor de posição, preço médio, eventos corporativos
   fisco.py             # apuração de IR, baldes, DARF
   obrigacoes.py        # contas a pagar dos DARF: pagamento é fato, valor é derivado

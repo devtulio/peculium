@@ -129,6 +129,73 @@ def proventos(conn, ano: int | None = None) -> Relatorio:
     return rel
 
 
+def fluxo_proventos(conn, meses: int = 12, ate: str | None = None) -> Relatorio:
+    """Provento mês a mês — a pergunta de quem investe para gerar caixa.
+
+    O relatório por ativo responde "qual paga mais"; este responde "quanto entra
+    por mês". São perguntas diferentes e a segunda precisa da série temporal."""
+    ap = razao.apurar(conn)
+    if not ap.proventos:
+        return Relatorio("Fluxo de caixa dos proventos",
+                         ["Competência", "Dividendos", "JCP", "Rendimentos",
+                          "IRRF", "Total", "Média 3 meses"], numericas={1, 2, 3, 4, 5, 6})
+
+    fim = (ate or max(p.data for p in ap.proventos))[:7]
+    por_mes: dict[str, dict[str, float]] = {}
+    for p in ap.proventos:
+        if p.data[:7] > fim:
+            continue
+        alvo = por_mes.setdefault(p.data[:7], {"DIVIDENDO": 0.0, "JCP": 0.0,
+                                               "RENDIMENTO": 0.0, "AMORTIZACAO": 0.0,
+                                               "irrf": 0.0})
+        alvo[p.tipo] = alvo.get(p.tipo, 0.0) + p.valor
+        alvo["irrf"] += p.irrf
+
+    # Preencher os meses vazios é o que mantém a média honesta: listar só os
+    # meses que pagaram infla a média de quem recebe trimestralmente.
+    ano, mes = int(fim[:4]), int(fim[5:7])
+    competencias: list[str] = []
+    for _ in range(meses):
+        competencias.append(f"{ano:04d}-{mes:02d}")
+        mes -= 1
+        if mes == 0:
+            ano, mes = ano - 1, 12
+    competencias.reverse()
+    primeiro = min(por_mes) if por_mes else fim
+    competencias = [c for c in competencias if c >= primeiro]
+
+    linhas, totais = [], []
+    vazio = {"DIVIDENDO": 0.0, "JCP": 0.0, "RENDIMENTO": 0.0,
+             "AMORTIZACAO": 0.0, "irrf": 0.0}
+    for i, competencia in enumerate(competencias):
+        v = por_mes.get(competencia, vazio)
+        total = v["DIVIDENDO"] + v["JCP"] + v["RENDIMENTO"] + v["AMORTIZACAO"]
+        totais.append(total)
+        janela = totais[max(0, i - 2):i + 1]
+        linhas.append([competencia_br(competencia), brl(v["DIVIDENDO"]), brl(v["JCP"]),
+                       brl(v["RENDIMENTO"]), brl(v["irrf"]), brl(total),
+                       brl(sum(janela) / len(janela))])
+
+    recebido = sum(totais)
+    media = recebido / len(totais) if totais else 0.0
+    custo = sum(p.custo_total for p in ap.carteira())
+    rodape = [f"Recebido em {len(totais)} mês(es): R$ {brl(recebido)}",
+              f"Média mensal: R$ {brl(media)}",
+              f"Projeção anualizada (média × 12): R$ {brl(media * 12)}"]
+    if custo:
+        rodape.append(f"Yield anualizado sobre o custo da carteira: "
+                      f"{pct(100 * media * 12 / custo)}")
+    rel = Relatorio("Fluxo de caixa dos proventos",
+                    ["Competência", "Dividendos", "JCP", "Rendimentos", "IRRF",
+                     "Total", "Média 3 meses"], linhas, rodape,
+                    numericas={1, 2, 3, 4, 5, 6})
+    rel.avisos.append(
+        "A projeção é a média do período multiplicada por 12 — extrapolação "
+        "simples, não previsão. Provento não é contratado: corte de dividendo, "
+        "aporte novo e mês atípico deslocam o número.")
+    return rel
+
+
 def apuracao(conn, ano: int) -> Relatorio:
     f = fisco.apurar(razao.apurar(conn))
     linhas = [[competencia_br(b.competencia), b.balde, brl(b.valor_vendas),

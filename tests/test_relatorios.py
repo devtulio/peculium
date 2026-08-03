@@ -73,6 +73,34 @@ def test_proventos_separam_tipo_e_irrf(conn):
 
 # --------------------------------------------------------------- IR
 
+def test_fluxo_de_proventos_preenche_o_mes_vazio(conn):
+    """Mês sem provento tem que entrar como zero: listar só os meses que pagaram
+    infla a média de quem recebe trimestralmente."""
+    lanc(conn, "2026-01-05", "COMPRA", qtd=100, preco=10)
+    lanc(conn, "2026-01-20", "DIVIDENDO", valor=300)
+    lanc(conn, "2026-03-20", "DIVIDENDO", valor=300)
+    rel = relatorios.fluxo_proventos(conn, meses=12, ate="2026-03")
+    assert [l[0] for l in rel.linhas] == ["01/2026", "02/2026", "03/2026"]
+    assert rel.linhas[1][5] == "0,00"                 # fevereiro existe e é zero
+    assert any("Média mensal: R$ 200,00" in t for t in rel.rodape)   # 600 / 3
+    assert any("Projeção anualizada (média × 12): R$ 2.400,00" in t
+               for t in rel.rodape)
+
+
+def test_fluxo_de_proventos_media_movel_e_yield(conn):
+    lanc(conn, "2026-01-05", "COMPRA", qtd=1000, preco=10)   # custo 10.000
+    for mes in ("01", "02", "03"):
+        lanc(conn, f"2026-{mes}-20", "RENDIMENTO", valor=100)
+    rel = relatorios.fluxo_proventos(conn, meses=12, ate="2026-03")
+    assert [l[6] for l in rel.linhas] == ["100,00", "100,00", "100,00"]
+    assert any("Yield anualizado" in t and "12,00%" in t for t in rel.rodape)
+    assert any("não previsão" in a for a in rel.avisos)
+
+
+def test_fluxo_de_proventos_sem_dados(conn):
+    assert relatorios.fluxo_proventos(conn).linhas == []
+
+
 def test_apuracao_traz_darf_e_prejuizo(conn):
     lanc(conn, "2026-01-05", "COMPRA", qtd=1000, preco=20)
     lanc(conn, "2026-06-10", "VENDA", qtd=1000, preco=30)

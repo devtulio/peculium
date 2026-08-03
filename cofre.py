@@ -233,7 +233,19 @@ def _conectar(dump: bytes | None) -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     if dump is not None:
-        conn.deserialize(dump)
+        # O GCM garante que os bytes são os que gravamos; não garante que o que
+        # gravamos era um banco são. Descobrir corrupção ao abrir é barato;
+        # descobrir na véspera do DARF, não. O erro cru do SQLite não serve para
+        # a tela — vira o erro do domínio.
+        try:
+            conn.deserialize(dump)
+            estado = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        except sqlite3.DatabaseError as e:
+            conn.close()
+            raise ArquivoInvalido(f"banco ilegível dentro do cofre: {e}") from e
+        if estado != "ok":
+            conn.close()
+            raise ArquivoInvalido(f"banco corrompido dentro do cofre: {estado}")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
