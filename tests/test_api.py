@@ -58,6 +58,34 @@ def test_ciclo_pela_ponte(api):
     assert dados(api.carteira()) == []
 
 
+def test_trancar_e_reabrir(api):
+    """Regressão: trancar só recarregava a tela, o cofre seguia aberto no Python
+    e a reabertura esbarrava na própria trava — "já está aberto em outra janela",
+    sem outra janela nenhuma."""
+    dados(api.criar_cofre("senha mestra boa"))
+    dados(api.cadastrar_instituicao({"nome": "Corretora Teste"}))
+
+    assert dados(api.fechar_cofre())["fechado"] is True
+    assert api.carteira()["ok"] is False          # trancado de verdade
+
+    dados(api.abrir_cofre("senha mestra boa"))
+    assert len(dados(api.cadastros())["instituicoes"]) == 1
+
+
+def test_reabrir_sem_ter_trancado_se_recupera(api):
+    """A janela pode ser recarregada sem passar pelo botão Trancar; abrir de novo
+    não pode travar contra o cofre que este mesmo processo já segura."""
+    dados(api.criar_cofre("senha mestra boa"))
+    dados(api.abrir_cofre("senha mestra boa"))    # sem fechar antes
+    dados(api.carteira())
+
+
+def test_fechar_duas_vezes_nao_quebra(api):
+    dados(api.criar_cofre("senha mestra boa"))
+    assert dados(api.fechar_cofre())["fechado"] is True
+    assert dados(api.fechar_cofre())["fechado"] is False
+
+
 def test_erro_de_preenchimento_volta_como_mensagem(api):
     dados(api.criar_cofre("senha mestra boa"))
     resposta = api.lancar({"data": "05/01/2026", "tipo": "COMPRA",

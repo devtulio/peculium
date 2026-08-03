@@ -27,7 +27,8 @@ import razao
 import relatorios
 import textos
 
-VERSAO = "0.1.0"
+VERSAO = "0.1.1"
+
 
 def raiz() -> Path:
     """Onde estão os arquivos do programa.
@@ -98,20 +99,43 @@ class Api:
                 "caminho": str(self._caminho),
                 "preferencias": preferencias()}
 
+    def _fechar(self) -> bool:
+        """Fecha o cofre e esquece o que estava em memória.
+
+        Chamado antes de qualquer abertura: sem isto, trancar a tela (que só
+        recarrega o HTML) deixava o cofre aberto no Python, e a abertura seguinte
+        esbarrava na **própria** trava de instância — "já está aberto em outra
+        janela", sem outra janela nenhuma."""
+        if self._aberto is None:
+            return False
+        self._aberto.fechar()
+        self._aberto = None
+        self._conferencias.clear()   # conferência pendente traz dado da carteira
+        return True
+
+    @_resposta
+    def fechar_cofre(self) -> dict:
+        """Trancar de verdade: a chave sai da memória do processo, e não só a
+        tela volta para a senha."""
+        return {"fechado": self._fechar()}
+
     @_resposta
     def criar_cofre(self, senha: str) -> dict:
         if len(senha or "") < 8:
             raise ValueError("a senha mestra precisa de pelo menos 8 caracteres")
+        self._fechar()
         self._aberto, chave = cofre.criar(self._caminho, senha)
         return {"chave_recuperacao": chave}
 
     @_resposta
     def abrir_cofre(self, senha: str) -> dict:
+        self._fechar()
         self._aberto = cofre.abrir(self._caminho, senha)
         return self._resumo_inicial()
 
     @_resposta
     def abrir_com_recuperacao(self, chave: str) -> dict:
+        self._fechar()
         self._aberto = cofre.abrir_com_recuperacao(self._caminho, chave)
         return self._resumo_inicial()
 

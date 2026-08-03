@@ -3,6 +3,22 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.1.1] — 2026-08-03
+
+### Corrigido
+
+- **Trancar impedia reabrir.** O botão *Trancar* apenas recarregava a tela; o cofre
+  seguia aberto no processo, segurando a trava de instância única. A abertura
+  seguinte esbarrava na **própria** trava e devolvia "peculium.pec já está aberto
+  em outra janela" — sem outra janela nenhuma. A única saída era fechar o
+  programa.
+
+  Além de travar, isso deixava a chave na memória do processo depois de trancar.
+  Agora *Trancar* fecha o cofre de verdade, esquece o que estava carregado e
+  descarta conferências de importação pendentes. Abrir o cofre também fecha
+  qualquer um que já esteja aberto, para o caso de a janela ser recarregada sem
+  passar pelo botão.
+
 ## [0.1.0] — 2026-08-03 — [DOI 10.5281/zenodo.21767165](https://doi.org/10.5281/zenodo.21767165)
 
 Primeira versão. Núcleo completo e interface funcionando; renda fixa e Tesouro
@@ -68,4 +84,5 @@ operacionais e rentabilidade por XIRR. Saída em HTML timbrado e CSV.
 - **Rede desligada por padrão.** Com a cotação ligada, só o ticker sai daqui.
 - **Datas guardadas em ISO, mostradas em `dd/mm/aaaa`.**
 
+[0.1.1]: https://github.com/devtulio/peculium/releases/tag/v0.1.1
 [0.1.0]: https://github.com/devtulio/peculium/releases/tag/v0.1.0

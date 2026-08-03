@@ -96,7 +96,13 @@ $('#form-recuperar').addEventListener('submit', async e => {
 
 $('#btn-recuperar').addEventListener('click', () => mostrarForm('#form-recuperar'));
 $('#btn-voltar-senha').addEventListener('click', () => mostrarForm('#form-abrir'));
-$('#btn-trancar').addEventListener('click', () => location.reload());
+// Trancar tem de fechar o cofre no Python, não só recarregar a tela: só
+// recarregando, a chave continuava na memória do processo e a próxima abertura
+// esbarrava na trava que ele mesmo segurava.
+$('#btn-trancar').addEventListener('click', async () => {
+  try { await api('fechar_cofre'); } catch (e) { /* recarrega mesmo assim */ }
+  location.reload();
+});
 
 async function abrir(dados) {
   ESTADO.config = dados.config || {};

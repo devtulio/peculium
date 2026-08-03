@@ -56,6 +56,7 @@
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
       abrir_com_recuperacao: () => ok({ config, versao: '0.1.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
+      fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
       salvar_config: mudancas => { config = { ...config, ...mudancas }; return ok(config); },
 
