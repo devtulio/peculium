@@ -1,4 +1,8 @@
-# Peculium — Design (ARQUITETURA FECHADA 2026-08-02 — reservada para implementação)
+# Peculium — Design
+
+> Arquitetura fechada em 2026-08-02 e **implementada**; este documento acompanha
+> o código, não o antecede. Onde os dois divergirem, o código está certo e este
+> arquivo está velho.
 
 Gerenciador de investimentos pessoais. Programa **desktop**, monousuário, com o
 acervo inteiro num **arquivo cifrado por senha mestra**. Segue o Licitarium na
@@ -19,9 +23,11 @@ forma (pywebview + SQLite + PyInstaller) e não a família SGx (server + navegad
 4. **Preço médio é global por ativo**, nunca por corretora — é a regra da RFB, e é
    o que faz portabilidade entre instituições não inventar lucro.
 5. **Rede desligada por padrão.** O programa é integralmente utilizável offline.
-6. **Fases**: v1.0 renda variável + módulo IR; v1.1 renda fixa e Tesouro.
-7. **Dependências**: `pywebview`, `cryptography`, `openpyxl`. Nada mais — o resto é
-   stdlib. As três são justificadas em §12.
+6. **Fases**: v1.0 entregou renda variável e o módulo de IR; a v0.2 trouxe a
+   curva da renda fixa e a v0.3 os leitores de nota por corretora. Renda fixa
+   está fechada.
+7. **Dependências**: `pywebview`, `cryptography`, `openpyxl`, `pypdf`. Nada mais —
+   o resto é stdlib. As quatro são justificadas em §12.
 8. **Repositório público, MIT, CI + Zenodo**, como os outros cinco. O repositório
    guarda código; o cofre nunca sai da máquina.
 
@@ -106,8 +112,15 @@ transação.
 # por commit passa a doer — aí a saída é cifra por página (SQLCipher), não remendo.
 ```
 
-Instância única por cofre: arquivo de trava com o PID ao lado do `.pec`; PID morto
-libera. Duas janelas no mesmo cofre se sobrescreveriam em silêncio.
+Instância única por cofre, porque duas janelas no mesmo arquivo se sobrescreveriam
+em silêncio. A trava é um **bloqueio do sistema operacional** (`msvcrt.locking` no
+Windows, `flock` fora dele) sobre um arquivo ao lado do `.pec`: se o processo
+morrer, o SO solta sozinho. Trava por PID gravado em arquivo deixaria resto de
+processo morto barrando o usuário do próprio cofre.
+
+Trancar a tela **fecha o cofre no processo**, não só recarrega o HTML — senão a
+chave continuaria na memória e a abertura seguinte esbarraria na trava que ele
+mesmo segura.
 
 Rotação: os **3 dumps anteriores** ficam como `peculium.1.pec` … `.3.pec`. Também
 cifrados — backup é cópia de arquivo, sem rotina própria.
@@ -136,8 +149,14 @@ eventos       (id INTEGER PK, ativo_id INT, data_ex TEXT, tipo TEXT,
 cotacoes      (ativo_id INT, data TEXT, fechamento REAL, origem TEXT,
                PRIMARY KEY (ativo_id, data))
 series        (indice TEXT, data TEXT, valor REAL, PRIMARY KEY (indice, data))
-rf_titulos    (lancamento_id INTEGER PK, indexador TEXT, taxa REAL,
-               vencimento TEXT, emissor TEXT, isento INT)   -- v1.1
+               -- séries do BCB/SGS: CDI, SELIC, IPCA
+rf_titulos    (ativo_id INTEGER PK, emissao TEXT, indexador TEXT, taxa REAL,
+               pu_base REAL, vencimento TEXT, emissor TEXT, isento INT, obs TEXT)
+notas         (id INTEGER PK, numero TEXT, corretora TEXT, cnpj TEXT,
+               data_pregao TEXT, valor_operacoes REAL, total_custos REAL, …)
+apelidos      (especificacao TEXT PK, ativo_id INT, criado_em TEXT)
+pagamentos    (id INTEGER PK, competencia TEXT, codigo TEXT, valor REAL,
+               multa REAL, juros REAL, data TEXT, obs TEXT, criado_em TEXT)
 importacoes   (id INTEGER PK, arquivo TEXT, tipo TEXT, em TEXT,
                linhas INT, novas INT, duplicadas INT, erros INT)
 auditoria     (id INTEGER PK, em TEXT, acao TEXT, detalhe TEXT)
@@ -153,7 +172,7 @@ Tipos de lançamento:
 | `AMORTIZACAO` | reduz o custo | FII amortizando devolve principal — não é rendimento |
 | `BONIFICACAO` | quantidade **e** custo | Entra pelo valor declarado pela companhia, não a custo zero |
 | `SUBSCRICAO` | quantidade, custo | |
-| `APLICACAO` / `RESGATE` | RF (v1.1) | Casa com `rf_titulos` |
+| — | RF | **Renda fixa usa `COMPRA` e `VENDA`**: aplicação é compra, resgate é venda. Ver §6.2 |
 | `TAXA` / `IRRF` | caixa | Custódia, taxas avulsas, DARF pago |
 
 Índices: `lancamentos(data)`, `lancamentos(ativo_id, data)`, `cotacoes(data)`.
@@ -277,9 +296,69 @@ com os **6 primeiros dígitos** dele. Então a senha cadastrada por corretora (n
 cofre) é tentada primeiro e é o único caminho garantido; os candidatos derivados
 do CPF são conveniência.
 
-**Renda fixa fica para a v1.1** e precisa de adaptador por corretora: XP e Inter
-têm layouts completamente diferentes entre si e do Sinacor, e notas de RF não têm
-corretagem nem emolumentos — só IOF e IR.
+Notas de **renda fixa** são outro assunto e têm módulo próprio — ver §6.3.
+
+## 6.2 Renda fixa (`renda_fixa.py`, `series.py`)
+
+**Título de renda fixa é um ativo com preço unitário.** Aplicação é compra,
+resgate é venda — e com isso o razão inteiro serve sem uma linha de mudança:
+quantidade, preço médio, custo e posição funcionam igual. O que muda é de onde vem
+a cotação: em vez de mercado, a **curva**, gravada em `cotacoes` com origem
+`CURVA`. Daí para frente, carteira, painel e relatórios não sabem que renda fixa é
+diferente.
+
+**A curva pertence ao papel, não à compra** — por isso `rf_titulos` é chaveada
+pelo ativo. Dois aportes no mesmo CDB são o mesmo título com o mesmo PU; o que
+muda é a quantidade, como no Tesouro.
+
+Base de cálculo, com os códigos **conferidos contra a API do BCB**, não assumidos:
+série **12** é o CDI diário em % ao dia, **11** a Selic diária, **433** o IPCA
+mensal.
+
+- **A série do BCB só publica em dia útil**, então contar registros entre duas
+  datas é contar dias úteis. Não existe tabela de feriados neste programa.
+- **Percentual do CDI incide sobre a taxa diária, não sobre o fator**:
+  `1 + 0,1%×1,10`, e não `(1+0,1%)^1,10`.
+- **Fora da cobertura da série, o cálculo é recusado** em vez de devolver um número
+  menor que a verdade. Patrimônio subavaliado em silêncio é pior que erro visível.
+- **O papel para de render no vencimento.**
+- **IPCA+ não tem curva**: depende do VNA oficial, que não se reconstrói com a
+  série mensal do IPCA. Preço digitado à mão vence o calculado — é assim que esses
+  papéis entram.
+- **PU de emissão que não bate com o preço da aplicação na mesma data é recusado.**
+  Um CDB de R$ 4,50 (450 × R$ 0,01) cadastrado com o padrão de R$ 1,00 vira uma
+  posição de R$ 457 — cem vezes o valor — e o custo continua certo, então nada
+  denuncia.
+
+Imposto: renda fixa **não entra na apuração mensal** (§8) — é retido na fonte pela
+tabela regressiva da Lei 11.033/2004. O IR mostrado é **estimativa** pelo prazo
+desde a emissão; o valor retido de verdade vem no extrato da corretora.
+
+## 6.3 Notas de renda fixa (`importar_nota_rf.py`)
+
+Aqui **não existe "o parser"**: existem adaptadores, um por corretora, escolhidos
+pelo conteúdo do arquivo. Ao contrário da renda variável, onde quase toda corretora
+usa o layout do Sinacor, **cada uma inventa a sua** para renda fixa — XP e Inter
+não têm uma linha em comum. Layout não reconhecido é **recusado com essa
+explicação**, em vez de lido pela metade.
+
+Importar cadastra o papel e lança a aplicação de uma vez, com o PU correto — que é
+justamente o dado que o cadastro manual erra.
+
+Dois invariantes barram a nota que não fecha: `quantidade × PU = valor bruto` e
+`bruto − IR − IOF = líquido`.
+
+**Armadilhas medidas nas notas reais**, cada uma com teste:
+
+- **XP:** o bloco "COMPROMISSADA COM LIQUIDEZ DIÁRIA" repete **todos** os rótulos
+  com valores `-`; sem cortar o texto antes dele, lê-se do lugar errado.
+- **Inter:** a linha de valores tem **menos campos que o cabeçalho** (a taxa
+  negociada vem vazia), então ler por posição erra a quantidade.
+- **Inter:** uma nota identificava o papel apenas como `"\x003"`. Usar isso como
+  ticker faria **qualquer outro papel também numerado 3 fundir-se com ele** — duas
+  aplicações diferentes virariam uma posição só, sem aviso. Quando o código não
+  identifica, o ticker é derivado de nome e vencimento e a conferência marca
+  **derivado**.
 
 ## 7. Rede (`cotacoes.py`) — opcional e contida
 
@@ -292,8 +371,8 @@ Desligada por padrão. Quando ligada:
   `cotacoes.origem`.
 
 Fontes: cotação de renda variável por provedor plugável (o padrão é API pública,
-não contratual — **pode quebrar, e quebrar é aceitável**); para a v1.1, séries do
-BCB (SGS: CDI, IPCA, Selic) e preços do Tesouro Transparente.
+não contratual — **pode quebrar, e quebrar é aceitável**) e as séries do BCB
+(SGS), que alimentam a curva da renda fixa — ver §6.2.
 
 Verificação de versão nova (GitHub API) segue a mesma regra: opcional, silenciosa
 ao falhar, e **nunca baixa nem troca binário sozinho**.
@@ -356,9 +435,11 @@ DARF), `PENDENTE`, `VENCIDO`, `PAGO`, `PARCIAL`, `A_MAIOR`.
   recolhe principal e encargos em guias separadas.
 - **Multa de mora sim, juros não.** A multa é determinística (Lei 9.430/96 art.
   61: 0,33% por dia, teto de 20%) e é calculada. Os **juros dependem da Selic
-  acumulada**, que só existe depois da série do BCB (v1.1): até lá o campo vem
-  vazio e a tela mostra um traço. Estimar juros dentro de conta de imposto é
-  exatamente o que este programa não faz.
+  acumulada** e continuam em branco: a série já está disponível desde a v0.2, mas
+  a regra de acumulação (Selic mensal a partir do mês seguinte ao vencimento, mais
+  1% no mês do pagamento) ainda não foi implementada. Enquanto não for, o campo
+  fica vazio — estimar juros dentro de conta de imposto é exatamente o que este
+  programa não faz.
 - `a_vencer()` alimenta o alerta do painel: o que vence na janela mais o vencido.
 
 ## 8.2 Entrada manual (`lancamentos.py`)
@@ -479,7 +560,10 @@ Peculium/
   obrigacoes.py        # contas a pagar dos DARF: pagamento é fato, valor é derivado
   importar_b3.py       # leitores XLSX/CSV + conferência
   importar_nota.py     # nota de corretagem em PDF (Sinacor): custos e rateio
-  cotacoes.py          # rede opcional (v1.0 renda variável; v1.1 BCB/Tesouro)
+  cotacoes.py          # cotação de mercado, rede opcional
+  series.py            # séries do BCB (SGS): a base da curva da renda fixa
+  renda_fixa.py        # título como ativo com PU; curva, posição e IR regressivo
+  importar_nota_rf.py  # nota de renda fixa: um adaptador por corretora
   relatorios.py        # HTML timbrado + CSV
   ui/index.html  ui/estilo.css  ui/app.js
   tests/               # pytest: cofre, razão, fisco, importação (carteira sintética)
@@ -499,9 +583,10 @@ teste, nem em captura de tela do manual.
 
 ## 14. Fora do escopo
 
-**v1.0**: renda fixa e Tesouro (v1.1) · cripto · ativos no exterior e Lei
-14.754/2023 · fundos com come-cotas · opções e derivativos · multiusuário ·
-sincronização em nuvem · auto-update de binário · transmissão à Receita.
+**Hoje**: cripto · ativos no exterior e Lei 14.754/2023 · fundos com come-cotas ·
+opções e derivativos · multiusuário · sincronização em nuvem · auto-update de
+binário · transmissão à Receita · juros de mora do DARF (ver §8.1) · curva do
+Tesouro IPCA+, que depende do VNA oficial.
 
 **Sempre**: cotação em tempo real, ordens, corretagem, qualquer execução de
 operação. O Peculium **registra e apura** — não opera.

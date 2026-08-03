@@ -46,7 +46,7 @@ emolumentos, e sem eles o preço médio nasce errado — e o imposto atrás dele
   fora: é tributada na fonte, pela tabela regressiva.
 - **Contas a pagar** — o que foi apurado contra o que foi pago, com multa de mora
   e alerta de vencimento.
-- **Relatórios** — nove, em HTML timbrado e CSV, incluindo o fluxo de caixa mensal
+- **Relatórios** — dez, em HTML timbrado e CSV, incluindo o fluxo de caixa mensal
   dos proventos e a posição pelo custo de aquisição em 31/12 para a declaração.
 
 <p align="center">
@@ -132,9 +132,12 @@ protege o dado é o cofre.
 | `fisco.py` | Apuração de IR, baldes de compensação, DARF |
 | `obrigacoes.py` | Contas a pagar: apurado contra pago, mora |
 | `importar_b3.py` | Relatórios da B3 |
-| `importar_nota.py` | Nota de corretagem em PDF |
+| `importar_nota.py` | Nota de corretagem em PDF (Sinacor) |
+| `importar_nota_rf.py` | Nota de renda fixa: um adaptador por corretora |
+| `renda_fixa.py` | Título como ativo com PU: curva, posição e IR regressivo |
+| `series.py` | Séries do Banco Central, base da curva |
 | `cotacoes.py` | Cotação de fechamento, opcional |
-| `relatorios.py` | Os nove relatórios, em HTML e CSV |
+| `relatorios.py` | Os dez relatórios, em HTML e CSV |
 
 Quatro dependências, justificadas uma a uma no [DESIGN.md](DESIGN.md#12-dependências-uma-a-uma).
 O resto é biblioteca padrão.
@@ -143,8 +146,8 @@ O resto é biblioteca padrão.
 
 ```bash
 pip install -r requirements.txt
-python -m pytest tests -q                        # 203 testes de unidade e integração
-cd tests-e2e && npm install && npx playwright test   # 14 testes de interface
+python -m pytest tests -q                        # 276 testes de unidade e integração
+cd tests-e2e && npm install && npx playwright test   # 19 testes de interface
 python -m PyInstaller --clean --noconfirm Peculium.spec
 ```
 
