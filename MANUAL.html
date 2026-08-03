@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Manual Operacional — Peculium v0.1.0</title>
+<script>
+  // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
+  document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
+</script>
+<style>
+  :root[data-tema="atrium"] { --bg:#f6f4ef; --papel:#fff; --texto:#2a2622;
+    --suave:#6b6459; --borda:#ddd7cb; --marca:#63234c; --codigo:#efece4; }
+  :root[data-tema="cera"] { --bg:#efe6d2; --papel:#f7f1e2; --texto:#33291b;
+    --suave:#6a5c43; --borda:#d8c9a8; --marca:#63234c; --codigo:#e8dcc2; }
+  :root[data-tema="aerarium"] { --bg:#14121a; --papel:#1e1b25; --texto:#e8e3dc;
+    --suave:#9d95a6; --borda:#332d3f; --marca:#e0a94a; --codigo:#272232; }
+
+  @page {
+    size: A4; margin: 20mm 18mm;
+    @top-center { content: "Peculium v0.1.0 — Manual Operacional";
+                  font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
+    @bottom-center { content: counter(page) " de " counter(pages);
+                     font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto);
+         font:16px/1.65 Georgia, "Times New Roman", serif; }
+  .folha { max-width:820px; margin:0 auto; background:var(--papel);
+           border:1px solid var(--borda); padding:3rem 3.4rem 4rem; }
+  h1,h2,h3 { font-weight:600; line-height:1.25; }
+  h1 { font-size:2rem; margin:0 0 .3rem; }
+  h2 { font-size:1.35rem; margin:2.6rem 0 .8rem; padding-bottom:.3rem;
+       border-bottom:1px solid var(--borda); }
+  h3 { font-size:1.05rem; margin:1.6rem 0 .5rem; }
+  p, li { font-size:.98rem; }
+  code, kbd { background:var(--codigo); border-radius:4px; padding:.1rem .35rem;
+              font:.88em ui-monospace, Consolas, monospace; }
+  pre { background:var(--codigo); border:1px solid var(--borda); border-radius:6px;
+        padding:.9rem 1.1rem; overflow-x:auto; font:.86rem ui-monospace, Consolas, monospace; }
+  table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.92rem; }
+  th, td { border-bottom:1px solid var(--borda); padding:.5rem .6rem; text-align:left;
+           vertical-align:top; }
+  th { font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; color:var(--suave); }
+  .aviso { border-left:4px solid var(--marca); background:var(--codigo);
+           padding:.8rem 1.1rem; margin:1.2rem 0; border-radius:0 6px 6px 0; }
+  .aviso strong { color:var(--marca); }
+  .capa { text-align:center; padding:3rem 0 2rem; border-bottom:1px solid var(--borda);
+          margin-bottom:1rem; }
+  .wordmark { font-family:Georgia, serif; letter-spacing:.18em; font-size:2.2rem; }
+  .wordmark span { color:var(--marca); }
+  .divisa { font-size:.8rem; letter-spacing:.2em; color:var(--suave); }
+  .versao { margin-top:1.2rem; font-size:.9rem; letter-spacing:.14em; color:var(--suave); }
+  .sumario ol { columns:2; font-size:.94rem; }
+  .barra { position:sticky; top:0; display:flex; gap:.5rem; justify-content:flex-end;
+           padding:.7rem 1rem; background:var(--bg); }
+  .barra button { font:inherit; font-size:.82rem; padding:.3rem .8rem; cursor:pointer;
+                  border:1px solid var(--borda); background:var(--papel);
+                  color:var(--texto); border-radius:999px; }
+  .barra button[aria-pressed="true"] { background:var(--marca); color:#fff;
+                                       border-color:var(--marca); }
+
+  @media print {
+    /* papel é papel: a impressão ignora o tema da tela e sai sempre clara */
+    :root { --bg:#fff; --papel:#fff; --texto:#1a1a1a; --suave:#555;
+            --borda:#ccc; --marca:#63234c; --codigo:#f2f2f2; }
+    .barra { display:none; }
+    .folha { max-width:none; border:0; padding:0; }
+    h2 { break-after:avoid; } h3 { break-after:avoid; }
+    table, pre, .aviso { break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barra" role="group" aria-label="Tema">
+  <button data-t="atrium">Atrium</button>
+  <button data-t="cera">Cera</button>
+  <button data-t="aerarium">Aerarium</button>
+  <button id="imprimir">🖨 Imprimir</button>
+</div>
+
+<div class="folha">
+
+<div class="capa">
+  <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
+  <div class="divisa">SVVM · CVIQVE</div>
+  <p style="margin:1.4rem 0 0">Manual Operacional</p>
+  <div class="versao">VERSÃO 0.1.0</div>
+</div>
+
+<nav class="sumario">
+  <h2 style="margin-top:1.4rem">Sumário</h2>
+  <ol>
+    <li><a href="#instalar">Instalação</a></li>
+    <li><a href="#primeira">Primeira execução e a chave de recuperação</a></li>
+    <li><a href="#painel">Painel</a></li>
+    <li><a href="#carteira">Carteira e cotações</a></li>
+    <li><a href="#lancamentos">Lançamentos e eventos</a></li>
+    <li><a href="#importar">Importar da B3 e notas de corretagem</a></li>
+    <li><a href="#impostos">Imposto de renda e contas a pagar</a></li>
+    <li><a href="#relatorios">Relatórios</a></li>
+    <li><a href="#seguranca">Segurança, backup e senha</a></li>
+    <li><a href="#faq">Perguntas frequentes</a></li>
+  </ol>
+</nav>
+
+<h2 id="instalar">1. Instalação</h2>
+
+<p>O Peculium é um programa de janela, sem instalador e sem servidor. Há dois
+caminhos.</p>
+
+<h3>Executável</h3>
+<p>Baixe <code>Peculium vX.Y.Z.exe</code> da página de releases e execute. Não há
+nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
+
+<div class="aviso">
+  <strong>O Windows pode barrar o executável.</strong> Binário novo, sem
+  assinatura digital e sem reputação, é bloqueado pelo <em>Smart App Control</em>
+  com a mensagem “Uma política de Controle de Aplicativo bloqueou este arquivo”.
+  Não é vírus nem defeito: é a política do sistema para programas que ainda não
+  conhece. Se acontecer, use o caminho do código-fonte abaixo — ele não passa por
+  essa verificação. Desligar o Smart App Control <strong>não</strong> é
+  recomendado: uma vez desligado, só volta a ligar reinstalando o Windows.
+</div>
+
+<p>Para conferir um executável recém-baixado antes de confiar nele:</p>
+<pre>"Peculium v0.1.0.exe" --verificar</pre>
+<p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
+<code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
+
+<h3>Código-fonte</h3>
+<pre>pip install -r requirements.txt
+python peculium.py</pre>
+<p>Requer Python 3.11 ou mais novo (o <code>deserialize</code> do SQLite, que o
+cofre usa, não existe antes disso).</p>
+
+<h2 id="primeira">2. Primeira execução e a chave de recuperação</h2>
+
+<p>Na primeira abertura o programa pede a criação da <strong>senha mestra</strong>,
+de no mínimo 8 caracteres. Ela é a única forma de abrir o cofre no dia a dia.</p>
+
+<p>Logo depois, o Peculium mostra a <strong>chave de recuperação</strong>: 256 bits
+em treze grupos de quatro caracteres. Ela abre o mesmo cofre sem a senha.</p>
+
+<div class="aviso">
+  <strong>A chave é mostrada uma única vez e não fica guardada em lugar nenhum.</strong>
+  Imprima ou copie para fora deste computador antes de continuar. Sem a senha e
+  sem a chave, o conteúdo do cofre é irrecuperável — não existe atendimento,
+  pergunta secreta nem porta dos fundos.
+</div>
+
+<p>O cofre fica em <code>%LOCALAPPDATA%\Peculium\peculium.pec</code>.</p>
+
+<h2 id="painel">3. Painel</h2>
+
+<p>Resumo da carteira: patrimônio a mercado, custo de aquisição, resultado não
+realizado, proventos e aportes do ano, alocação por classe e maiores posições.</p>
+
+<p>No topo aparecem os <strong>alertas</strong>: DARF vencendo nos próximos quinze
+dias ou já vencido, ativos sem cotação e inconsistências detectadas no razão —
+por exemplo, venda numa corretora onde não há saldo, que é o sintoma de uma
+transferência que faltou importar.</p>
+
+<h2 id="carteira">4. Carteira e cotações</h2>
+
+<p>Uma linha por ativo, com quantidade, preço médio, custo, cotação, valor de
+mercado, resultado e participação na carteira.</p>
+
+<p>Ativo sem cotação aparece com um traço e é avaliado pelo <strong>preço
+médio</strong> — o patrimônio, nesse caso, é conservador, não otimista.</p>
+
+<p>O botão <em>Atualizar cotações</em> só funciona com a cotação online ligada em
+Configurações. Ela vem <strong>desligada</strong>: o programa é inteiramente
+utilizável sem rede. Quando ligada, só o código do ativo sai daqui — nunca
+quantidade, valor, instituição ou documento.</p>
+
+<h2 id="lancamentos">5. Lançamentos e eventos</h2>
+
+<h3>Tipos aceitos</h3>
+<table>
+  <tr><th>Tipo</th><th>Para quê</th></tr>
+  <tr><td><code>COMPRA</code> / <code>VENDA</code></td>
+      <td>Negócio. Os custos entram no preço médio na compra e reduzem o ganho na venda.</td></tr>
+  <tr><td><code>TRANSFERENCIA</code></td>
+      <td>Portabilidade entre corretoras. <strong>Não é venda</strong>: carrega o
+          custo de aquisição para o destino.</td></tr>
+  <tr><td><code>DIVIDENDO</code>, <code>JCP</code>, <code>RENDIMENTO</code></td>
+      <td>Proventos recebidos. O JCP tem IRRF retido na fonte.</td></tr>
+  <tr><td><code>AMORTIZACAO</code></td>
+      <td>Devolução de principal (comum em FII). Reduz o custo, não é rendimento.</td></tr>
+  <tr><td><code>BONIFICACAO</code></td>
+      <td>Ações recebidas. Entram pelo valor declarado pela companhia —
+          custo zero infla o ganho na venda futura.</td></tr>
+  <tr><td><code>SUBSCRICAO</code></td><td>Exercício de direito de subscrição.</td></tr>
+  <tr><td><code>TAXA</code> / <code>IRRF</code></td><td>Custódia, taxas avulsas, imposto pago.</td></tr>
+</table>
+
+<p>Datas podem ser digitadas como <code>dd/mm/aaaa</code>. Data no futuro é
+recusada: ela corromperia em silêncio qualquer pergunta sobre a posição de hoje.</p>
+
+<h3>Correção: estorno, nunca edição</h3>
+<p>Lançamento errado não se apaga nem se altera — clica-se em <em>estornar</em>.
+O programa grava um lançamento espelho e passa a ignorar o par, que continua
+visível no extrato, riscado. É o que mantém a memória de cálculo do imposto
+auditável.</p>
+
+<h3>Eventos corporativos</h3>
+<p>Desdobramento, grupamento, conversão e incorporação. O <strong>fator é sempre o
+multiplicador da quantidade</strong>: desdobramento de 1:10 é <code>10</code>;
+grupamento de 10:1 é <code>0,1</code>.</p>
+
+<p>Desdobramento e grupamento mudam a quantidade e <strong>não</strong> o custo
+total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
+para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
+
+<h2 id="importar">6. Importar da B3 e notas de corretagem</h2>
+
+<p>Nada é gravado antes da sua conferência, e o arquivo original nunca é guardado:
+ele traz CPF.</p>
+
+<h3>Relatórios da B3</h3>
+<p>Na Área do Investidor, exporte <strong>Negociação</strong> (compras e vendas) e
+<strong>Movimentação</strong> (proventos e eventos), em CSV ou XLSX.</p>
+
+<p>Reimportar períodos que se sobrepõem é o caso normal: cada linha tem uma
+impressão digital e o que já entrou é marcado como duplicado. Duas ordens
+idênticas no mesmo dia, porém, entram as duas — não são duplicata.</p>
+
+<div class="aviso">
+  <strong>O relatório de Negociação não traz corretagem nem emolumentos.</strong>
+  Tudo que vem só da B3 nasce com custo zero, e o preço médio fica subavaliado até
+  a nota de corretagem entrar. O relatório de Custos mostra quantos negócios estão
+  nessa situação.
+</div>
+
+<p>Um ticker terminado em <code>11</code> pode ser FII, ETF ou unit, e a classe
+muda a alíquota do imposto. Por isso o programa pede confirmação em vez de decidir
+sozinho.</p>
+
+<h3>Nota de corretagem</h3>
+<p>A nota em PDF é a <strong>única fonte dos custos</strong>. Ela é conferida por
+duas contas antes de qualquer gravação: a soma das linhas tem de reconstruir o
+valor das operações, e operações mais custos e IRRF têm de reconstruir o líquido.
+Se não fecharem, a nota é recusada — melhor não importar do que importar errado.</p>
+
+<p>Os custos vêm no rodapé, para a nota inteira, e são <strong>rateados pro rata
+pelo valor financeiro</strong> de cada negócio, com a última linha absorvendo os
+centavos de arredondamento.</p>
+
+<p>A nota traz o nome de pregão (“KLABIN S/A PN”), não o código. Na primeira vez
+você informa o ticker; o programa aprende e passa a reconhecer. Os FII costumam
+trazer o código embutido e já são reconhecidos sozinhos.</p>
+
+<p>Se o negócio já tiver vindo da B3, a nota <strong>não</strong> o duplica: ela
+acrescenta os custos, estornando o lançamento antigo e gravando o corrigido.</p>
+
+<p>Notas protegidas por senha: informe seu CPF em Configurações e o programa tenta
+as variações usuais (três primeiros dígitos, três últimos, seis primeiros, CPF
+inteiro). Se a sua corretora usa outra senha, cadastre-a no campo ao lado.</p>
+
+<h2 id="impostos">7. Imposto de renda e contas a pagar</h2>
+
+<p>A apuração é mensal e separada em três baldes que <strong>não se compensam
+entre si</strong>:</p>
+
+<table>
+  <tr><th>Balde</th><th>Alíquota</th><th>Isenção</th><th>Compensa com</th></tr>
+  <tr><td>Ações, swing trade</td><td>15%</td>
+      <td>Vendas de ações até R$ 20.000 no mês</td><td>Só swing</td></tr>
+  <tr><td>Day trade</td><td>20%</td><td>Nenhuma</td><td>Só day trade</td></tr>
+  <tr><td>FII</td><td>20%</td><td>Nenhuma</td><td>Só FII</td></tr>
+</table>
+
+<p>O limite de isenção olha o <strong>valor bruto das vendas</strong>, não o
+líquido de custos, e não é faixa: passou de R$ 20.000, o ganho inteiro é
+tributado. ETF e BDR não têm isenção, mas o prejuízo deles compensa ganho de
+ações.</p>
+
+<p>Prejuízo acumulado não tem prazo de validade. IRRF retido a mais atravessa para
+o mês seguinte. DARF abaixo de R$ 10 <strong>acumula</strong> em vez de sumir, e
+sai junto do próximo.</p>
+
+<h3>Contas a pagar</h3>
+<p>O valor devido nunca é gravado: ele é recalculado toda vez. Só o
+<strong>pagamento</strong> vira registro. Cruzar os dois é o que revela a apuração
+que mudou depois de paga — quando uma nota antiga entra e o custo muda, o DARF já
+pago aparece como <em>parcial</em>, com a diferença.</p>
+
+<p>Em atraso, a multa de mora (0,33% ao dia, teto de 20%) é calculada. Os
+<strong>juros não</strong>: dependem da Selic acumulada, que o programa ainda não
+importa. Inventar juros dentro de conta de imposto é o que este programa não faz.</p>
+
+<div class="aviso">
+  <strong>O Peculium apura e informa; não transmite nada.</strong> Ele não fala com
+  a Receita, não emite DARF oficial e não substitui contador. O que produz é
+  memória de cálculo para você conferir e pagar.
+</div>
+
+<h2 id="relatorios">8. Relatórios</h2>
+
+<p>Nove relatórios, todos exportáveis em HTML timbrado (para imprimir) e CSV (para
+planilha):</p>
+
+<ol>
+  <li><strong>Posição consolidada</strong> — carteira a mercado</li>
+  <li><strong>Proventos por ativo</strong> — com <em>yield on cost</em></li>
+  <li><strong>Fluxo de caixa dos proventos</strong> — mês a mês, com média móvel e
+      projeção; os meses sem provento entram como zero, senão a média mente</li>
+  <li><strong>Apuração de IR</strong> — memória de cálculo e DARF</li>
+  <li><strong>Contas a pagar</strong> — apurado contra pago</li>
+  <li><strong>Bens e direitos</strong> — posição em 31/12 pelo custo de aquisição</li>
+  <li><strong>Operações</strong> — extrato completo</li>
+  <li><strong>Custos operacionais</strong> — por mês e instituição</li>
+  <li><strong>Rentabilidade</strong> — XIRR, o retorno do dinheiro no tempo</li>
+</ol>
+
+<p>A impressão sai sempre em tema claro, qualquer que seja o tema da tela.</p>
+
+<h2 id="seguranca">9. Segurança, backup e senha</h2>
+
+<h3>O que o cofre protege</h3>
+<p>Quem furta o computador ou lê o disco não passa do arquivo cifrado — nem o
+formato das tabelas é legível. Não existe porta de rede aberta, então não há o que
+atacar pela rede local. Como o arquivo já é o cofre, guardá-lo em nuvem não expõe
+nada além do tamanho e da data.</p>
+
+<h3>O que ele não protege</h3>
+<p>Programa malicioso rodando na sua conta, com o Peculium aberto, alcança a chave
+na memória. Nenhum software local resolve isso, e prometer que resolve seria
+mentira. Relatórios exportados saem em claro, por natureza.</p>
+
+<h3>Backup</h3>
+<p>Backup é copiar o arquivo. O programa já mantém os três dumps anteriores ao
+lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.</p>
+
+<h3>Troca de senha</h3>
+<div class="aviso">
+  <strong>Backups anteriores continuam abrindo com a senha antiga.</strong> A chave
+  que cifra o banco não muda na troca — só o embrulho dela. Se você trocou a senha
+  porque ela vazou, apague os backups antigos; do contrário eles seguem abrindo
+  com a senha comprometida. A chave de recuperação continua valendo.
+</div>
+
+<h2 id="faq">10. Perguntas frequentes</h2>
+
+<h3>O patrimônio está diferente do que a corretora mostra</h3>
+<p>Confira, nesta ordem: ativos sem cotação (avaliados pelo preço médio), notas de
+corretagem ainda não importadas (custo subavaliado) e eventos corporativos não
+lançados — um desdobramento não registrado deixa a quantidade pela metade.</p>
+
+<h3>Aparece “saldo negativo na instituição”</h3>
+<p>Quase sempre é uma transferência entre corretoras que não foi importada: a
+posição total fecha, mas a distribuição por corretora não. Lance a portabilidade.
+A apuração de imposto não depende disso.</p>
+
+<h3>A nota foi recusada</h3>
+<p>As duas contas de conferência não fecharam. A mensagem diz a diferença e, quando
+o problema é o IRRF, diz qual leitura fecharia. Notas de venda ainda não foram
+validadas contra documento real — se a sua for recusada, o relato ajuda a corrigir.</p>
+
+<h3>Esqueci a senha</h3>
+<p>Use a chave de recuperação. Sem ela e sem a senha, não há recuperação possível.</p>
+
+<h3>Posso usar em mais de um computador?</h3>
+<p>Sim: copie o arquivo <code>.pec</code>. Mas não abra o mesmo cofre em dois
+lugares ao mesmo tempo esperando que as alterações se juntem — a última gravação
+vence. O programa impede duas janelas sobre o mesmo arquivo na mesma máquina.</p>
+
+<h3>Renda fixa e Tesouro Direto</h3>
+<p>Ficam para a versão 1.1. As notas de renda fixa têm layout próprio de cada
+corretora e exigem um leitor por instituição.</p>
+
+</div>
+
+<script>
+  const botoes = document.querySelectorAll('.barra button[data-t]');
+  function aplicar(t) {
+    document.documentElement.dataset.tema = t;
+    localStorage.setItem('tema', t);
+    botoes.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.t === t)));
+  }
+  botoes.forEach(b => b.addEventListener('click', () => aplicar(b.dataset.t)));
+  document.getElementById('imprimir').addEventListener('click', () => print());
+  aplicar(localStorage.getItem('tema') || 'cera');
+</script>
+</body>
+</html>

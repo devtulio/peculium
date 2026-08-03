@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 import json
+import sys
 import traceback
 from datetime import date
 from pathlib import Path
@@ -27,6 +28,15 @@ import relatorios
 import textos
 
 VERSAO = "0.1.0"
+
+def raiz() -> Path:
+    """Onde estão os arquivos do programa.
+
+    Congelado em onefile, o PyInstaller descompacta tudo num diretório temporário
+    e aponta `sys._MEIPASS` para ele; `__file__` ali é o script dentro do pacote e
+    não serve para achar a `ui/`."""
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+
 
 PASTA = Path.home() / "AppData" / "Local" / "Peculium"
 COFRE = PASTA / "peculium.pec"
@@ -504,15 +514,45 @@ def _limpar(dados: dict) -> dict:
     return {k: (None if v == "" else v) for k, v in (dados or {}).items()}
 
 
+def verificar() -> int:
+    """`Peculium.exe --verificar` — prova que o executável abre e está completo,
+    sem criar janela nem tocar no cofre.
+
+    Existe porque um binário recém-gerado pode ser barrado pelo Smart App Control
+    do Windows, e trocar o exe que funciona por um bloqueado só se descobre na
+    hora errada. Devolve 0 quando está são; o resultado também vai para um
+    arquivo, já que a build sem console não tem para onde imprimir."""
+    faltando = [nome for nome in ("ui/index.html", "ui/app.js", "ui/estilo.css")
+                if not (raiz() / nome).exists()]
+    try:
+        import webview                                       # noqa: F401
+        backend = "webview importado"
+    except Exception as e:                                   # noqa: BLE001
+        faltando.append(f"pywebview: {e}")
+        backend = "webview indisponível"
+    laudo = (f"Peculium {VERSAO}\nraiz: {raiz()}\n{backend}\n"
+             + ("ÍNTEGRO\n" if not faltando else "FALTANDO: " + ", ".join(faltando)))
+    print(laudo)
+    try:
+        (Path(sys.executable).parent / "peculium-verificacao.txt").write_text(
+            laudo, encoding="utf-8")
+    except OSError:
+        pass
+    return 0 if not faltando else 1
+
+
 def main() -> None:
+    if "--verificar" in sys.argv:
+        raise SystemExit(verificar())
+
     import webview
 
     PASTA.mkdir(parents=True, exist_ok=True)
     api = Api()
     tema = preferencias().get("tema", "atrium")
     janela = webview.create_window(
-        f"Peculium {VERSAO}", str(Path(__file__).parent / "ui" / "index.html")
-        + f"?tema={tema}", js_api=api, width=1280, height=820, min_size=(900, 600))
+        f"Peculium {VERSAO}", f"{raiz() / 'ui' / 'index.html'}?tema={tema}",
+        js_api=api, width=1280, height=820, min_size=(900, 600))
     api._janela = janela
     webview.start()
 

@@ -1,0 +1,9 @@
+# Três dependências, justificadas uma a uma no DESIGN.md §12.
+pywebview>=5.0        # a janela; a alternativa seria abrir porta local
+cryptography>=42.0    # AES-GCM do cofre — não existe na stdlib
+openpyxl>=3.1         # ler os relatórios XLSX da B3
+pypdf>=5.0            # ler a nota de corretagem, única fonte dos custos
+
+# Desenvolvimento
+pytest>=8.0
+pyinstaller>=6.0

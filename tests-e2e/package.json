@@ -1,0 +1,11 @@
+{
+  "name": "peculium-e2e",
+  "private": true,
+  "description": "Testes de interface sobre a ponte falsa (ui/mock.js)",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

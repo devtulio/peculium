@@ -1,0 +1,26 @@
+{
+  "title": "Peculium",
+  "description": "<p>Gerenciador de investimentos pessoais para uso individual: programa desktop, monousuário, com o acervo inteiro num arquivo cifrado por senha mestra e sem nenhuma porta de rede aberta.</p><p>Mantém um razão append-only de lançamentos do qual posição, preço médio e resultado são derivados por recomputação; importa os relatórios da B3 e as notas de corretagem em PDF (a única fonte dos custos operacionais); apura imposto de renda sobre renda variável em baldes que não se compensam entre si; e emite relatórios gerenciais, incluindo a posição pelo custo de aquisição para a declaração de bens.</p><p>Escrito em Python com pywebview e SQLite. Interface em português do Brasil.</p>",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Silva, Túlio Ribeiro de Moura e",
+      "affiliation": "Independente"
+    }
+  ],
+  "keywords": [
+    "investimentos",
+    "renda variável",
+    "imposto de renda",
+    "B3",
+    "nota de corretagem",
+    "carteira de investimentos",
+    "preço médio",
+    "criptografia",
+    "Python",
+    "SQLite"
+  ],
+  "language": "por",
+  "access_right": "open"
+}

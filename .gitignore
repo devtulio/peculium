@@ -52,3 +52,12 @@ playwright-report/
 .idea/
 Thumbs.db
 desktop.ini
+
+# Node (testes de interface)
+tests-e2e/node_modules/
+tests-e2e/test-results/
+tests-e2e/playwright-report/
+tests-e2e/package-lock.json
+
+# Verificação do executável
+peculium-verificacao.txt
