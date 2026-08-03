@@ -194,10 +194,18 @@ def _negociacoes_do_dia(ap: Apuracao, ativos: dict, data: str,
             _mover(ap, ativo_id, inst_id, qc_liq, pos.ticker, data)
         if qv_liq > EPS:
             if qv_liq > pos.quantidade + EPS:
-                # quase sempre importação incompleta, não venda a descoberto
-                raise ErroDeRazao(
-                    f"{data_br(data)}: venda de {qv_liq:g} de {pos.ticker} com posição de "
-                    f"{pos.quantidade:g} — falta lançamento anterior")
+                # Quase sempre importação incompleta, não venda a descoberto: o
+                # extrato da B3 cobre uma janela e a compra pode ser anterior a
+                # ela. Derrubar a apuração inteira por causa de uma linha faria
+                # a carteira sumir da tela — some a venda, não o programa. Ela
+                # também NÃO entra no IR, porque o custo é desconhecido e
+                # inventá-lo produziria imposto errado.
+                ap.avisos.append(
+                    f"{data_br(data)}: venda de {qv_liq:g} de {pos.ticker} com "
+                    f"posição de apenas {pos.quantidade:g} — falta o lançamento "
+                    f"de compra anterior. Esta venda foi IGNORADA: não entrou na "
+                    f"posição nem na apuração de IR")
+                continue
             custo_base = qv_liq * pos.preco_medio
             ap.vendas.append(Venda(data, ativo_id, pos.ticker, pos.classe, inst_id,
                                    qv_liq, qv_liq * bruto_un, qv_liq * custo_un,

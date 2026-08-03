@@ -11,26 +11,50 @@ from datetime import datetime
 _MILHAR = re.compile(r"^-?\d{1,3}(\.\d{3})+$")
 
 
-def numero(valor) -> float:
+BR = "BR"
+US = "US"
+AUTO = "AUTO"
+
+
+def formato_numerico(amostras) -> str:
+    """Decide a convenção decimal de um arquivo inteiro, por amostragem.
+
+    Existe porque `9.919` é indecidível isoladamente: mil e novecentos e
+    dezenove em pt-BR, nove vírgula novecentos e dezenove em en-US. No arquivo
+    inteiro a dúvida acaba — **se aparecer vírgula decimal em qualquer valor, o
+    arquivo é pt-BR**; senão, o ponto é decimal.
+
+    Caso real que obrigou isto: a planilha da B3 escreve `3.5` e `9.919` em
+    formato americano, e a heurística por valor devolvia 9919 — mil vezes o
+    valor — num provento da carteira do usuário."""
+    for bruto in amostras:
+        if bruto is None or isinstance(bruto, (int, float)):
+            continue
+        if re.search(r"\d,\d", str(bruto)):
+            return BR
+    return US
+
+
+def numero(valor, formato: str = AUTO) -> float:
     """Aceita 1.234,56 / 1234.56 / 1.500 / R$ 1.234,56 / '-' / vazio.
 
-    O caso difícil é `1.500` sem vírgula nenhuma: pode ser mil e quinhentos
-    (pt-BR) ou um e meio (en-US). Resolve pelo formato — ponto só é milhar
-    quando separa grupos de exatamente três dígitos.
-
-    # ponytail: um arquivo en-US com o valor 1.500 (um e meio) seria lido como
-    # 1500. Os documentos aqui são todos pt-BR; se entrar arquivo de outra
-    # origem, o formato vira parâmetro.
+    `formato` diz a convenção quando ela é conhecida — use
+    `formato_numerico()` para descobri-la a partir do arquivo. Em `AUTO`, o
+    ponto só é tratado como milhar quando separa grupos de exatamente três
+    dígitos, o que acerta em pt-BR e erra em en-US: por isso quem lê arquivo
+    deve decidir o formato uma vez e passar adiante.
     """
     if valor is None or isinstance(valor, (int, float)):
         return float(valor or 0)
     texto = str(valor).strip().replace("R$", "").replace(" ", "").replace("\xa0", "")
     if texto in ("", "-", "--"):
         return 0.0
-    if "," in texto:                       # pt-BR: ponto é milhar, vírgula é decimal
+    if formato == US:
+        texto = texto.replace(",", "")     # vírgula só pode ser milhar
+    elif "," in texto:                     # pt-BR: ponto é milhar, vírgula é decimal
         texto = texto.replace(".", "").replace(",", ".")
-    elif _MILHAR.match(texto):
-        texto = texto.replace(".", "")
+    elif formato != US and _MILHAR.match(texto):
+        texto = texto.replace(".", "")     # vale em BR e em AUTO; só US descarta
     try:
         return float(texto)
     except ValueError:

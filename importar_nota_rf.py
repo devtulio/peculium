@@ -27,6 +27,7 @@ RESGATE = "RESGATE"
 
 CRIA = "CRIA"
 JA_IMPORTADA = "JA_IMPORTADA"
+SO_CADASTRO = "SO_CADASTRO"      # o negócio já veio da B3; a nota traz o papel
 
 _DATA = r"\d{2}/\d{2}/\d{4}"
 
@@ -297,6 +298,21 @@ def conferir(conn, notas: list[NotaRF]) -> Conferencia:
         if _hash(nota) in ja:
             conf.itens.append(Item(nota, JA_IMPORTADA, ativo_id, "já importada"))
             continue
+
+        # A Movimentação da B3 também traz a aplicação em renda fixa. Sem esta
+        # checagem, importar os dois lançaria o mesmo aporte duas vezes — o que a
+        # nota acrescenta, nesse caso, são os dados do papel.
+        if ativo_id is not None and conn.execute(
+                "SELECT 1 FROM lancamentos WHERE data=? AND tipo=? AND ativo_id=?"
+                "  AND abs(quantidade-?) < 1e-9 AND abs(preco-?) < 0.005"
+                "  AND estorna_id IS NULL",
+                (nota.data, "COMPRA" if nota.tipo == APLICACAO else "VENDA",
+                 ativo_id, nota.quantidade, nota.pu)).fetchone():
+            conf.itens.append(Item(
+                nota, SO_CADASTRO, ativo_id,
+                "a aplicação já veio da B3: a nota acrescenta só os dados do papel"))
+            continue
+
         conf.itens.append(Item(
             nota, CRIA, ativo_id,
             "título já cadastrado: entra só a aplicação" if ativo_id else
@@ -320,7 +336,9 @@ def gravar(conn, conf: Conferencia, classe: str = "RF") -> dict:
 
     agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
     criados = titulos = 0
-    for item in conf.por_situacao(CRIA):
+    for item in conf.itens:
+        if item.situacao not in (CRIA, SO_CADASTRO):
+            continue
         nota = item.nota
         ativo_id = item.ativo_id
         if ativo_id is None:
@@ -335,15 +353,16 @@ def gravar(conn, conf: Conferencia, classe: str = "RF") -> dict:
             instituicao = (conn.execute("INSERT INTO instituicoes (nome) VALUES (?)",
                                         (nota.corretora,)).lastrowid,)
 
-        conn.execute(
-            "INSERT OR IGNORE INTO lancamentos (data, tipo, ativo_id, instituicao_id,"
-            " quantidade, preco, valor, irrf, origem, hash_origem, obs, criado_em)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (nota.data, "COMPRA" if nota.tipo == APLICACAO else "VENDA", ativo_id,
-             instituicao[0], nota.quantidade, nota.pu, nota.valor_bruto, nota.ir,
-             f"NOTA_RF_{nota.corretora.split()[0]}", _hash(nota),
-             f"nota {nota.numero}", agora))
-        criados += 1
+        if item.situacao == CRIA:
+            conn.execute(
+                "INSERT OR IGNORE INTO lancamentos (data, tipo, ativo_id,"
+                " instituicao_id, quantidade, preco, valor, irrf, origem,"
+                " hash_origem, obs, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                (nota.data, "COMPRA" if nota.tipo == APLICACAO else "VENDA", ativo_id,
+                 instituicao[0], nota.quantidade, nota.pu, nota.valor_bruto, nota.ir,
+                 f"NOTA_RF_{nota.corretora.split()[0]}", _hash(nota),
+                 f"nota {nota.numero}", agora))
+            criados += 1
 
         # o cadastro do papel só entra na aplicação: no resgate os dados do
         # título já existem, e sobrescrever com o PU do dia seria o erro

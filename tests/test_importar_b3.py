@@ -249,6 +249,54 @@ def test_xlsx_com_titulo_antes_do_cabecalho(tmp_path, conn):
     assert conf.por_situacao(b3.NOVA)[0].ticker == "PETR4"
 
 
+def test_xlsx_com_dimensao_mentirosa(tmp_path, conn):
+    """A planilha da B3 declara `<dimension ref="A1:A1"/>`, o que é falso.
+
+    O modo read_only do openpyxl acredita na declaração e devolve só a coluna A:
+    o cabeçalho chegava com um campo e o arquivo real era recusado como "não é da
+    B3". Reproduz o defeito reescrevendo a dimensão dentro do .xlsx."""
+    import re as _re
+    import shutil
+    import zipfile
+
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(NEG_CABECALHO.split(";"))
+    ws.append(["05/01/2026", "Compra", "Mercado à Vista", "-", "ALFA", "PETR4",
+               "100", "10.5", "1050"])
+    bom = tmp_path / "bom.xlsx"
+    wb.save(bom)
+
+    ruim = tmp_path / "negociacao.xlsx"
+    with zipfile.ZipFile(bom) as origem, zipfile.ZipFile(ruim, "w") as destino:
+        for item in origem.infolist():
+            dados = origem.read(item.filename)
+            if item.filename.endswith("sheet1.xml"):
+                dados = _re.sub(rb'<dimension ref="[^"]+"/>',
+                                b'<dimension ref="A1:A1"/>', dados)
+            destino.writestr(item, dados)
+    shutil.rmtree(bom, ignore_errors=True)
+
+    conf = b3.ler(ruim, conn)
+    (linha,) = conf.por_situacao(b3.NOVA)
+    assert linha.ticker == "PETR4" and linha.quantidade == 100
+    assert linha.preco == pytest.approx(10.5)      # e o formato americano da B3
+
+
+def test_formato_numerico_e_do_arquivo_inteiro(tmp_path, conn):
+    """`9.919` é indecidível isoladamente — 9919 em pt-BR, 9,919 em en-US. A
+    planilha real da B3 vem em americano, e a heurística por valor devolvia mil
+    vezes o preço de um provento."""
+    alvo = tmp_path / "negociacao.csv"
+    alvo.write_text("\n".join([NEG_CABECALHO,
+        "05/01/2026;Compra;Mercado à Vista;-;ALFA;PETR4;100;9.919;991.9"]),
+        encoding="utf-8-sig")
+    (linha,) = b3.ler(alvo, conn).por_situacao(b3.NOVA)
+    assert linha.preco == pytest.approx(9.919)     # e não 9919
+    assert linha.valor == pytest.approx(991.9)
+
+
 def test_arquivo_que_nao_e_da_b3(tmp_path, conn):
     alvo = tmp_path / "lista.csv"
     alvo.write_text("nome;telefone\nfulano;123\n", encoding="utf-8")

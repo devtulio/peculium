@@ -30,7 +30,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.3.1"
+VERSAO = "0.3.2"
 
 
 def raiz() -> Path:

@@ -60,11 +60,24 @@ def test_venda_usa_preco_medio_da_data(conn):
     assert ap.posicoes[1].preco_medio == pytest.approx(10)   # venda não muda o médio
 
 
-def test_venda_maior_que_a_posicao_e_erro_de_dado(conn):
+def test_venda_maior_que_a_posicao_e_ignorada_com_aviso(conn):
+    """Importação incompleta é o caso comum: o extrato da B3 cobre uma janela e a
+    compra pode ser anterior. Derrubar a apuração faria a carteira sumir da tela
+    inteira por causa de uma linha — e apurar a venda com custo inventado
+    produziria imposto errado. Some a venda, não o programa."""
     lanc(conn, "2026-01-05", "COMPRA", qtd=10, preco=10)
     lanc(conn, "2026-01-06", "VENDA", qtd=40, preco=12)
-    with pytest.raises(razao.ErroDeRazao, match="falta lançamento anterior"):
-        razao.apurar(conn)
+    ap = razao.apurar(conn)
+    assert ap.vendas == []                       # fora do IR
+    assert ap.posicoes[1].quantidade == 10       # e fora da posição
+    assert "IGNORADA" in ap.avisos[0] and "falta o lançamento" in ap.avisos[0]
+
+
+def test_uma_venda_orfa_nao_derruba_o_resto_da_carteira(conn):
+    lanc(conn, "2026-01-05", "COMPRA", ativo=2, qtd=100, preco=10)
+    lanc(conn, "2026-01-06", "VENDA", qtd=40, preco=12)     # ativo 1, sem compra
+    carteira = {p.ticker: p for p in razao.apurar(conn).carteira()}
+    assert carteira["MXRF11"].quantidade == 100
 
 
 # --------------------------------------------------------------- day trade

@@ -44,11 +44,22 @@ TIPOS = {
     "rendimento": "RENDIMENTO",
     "amortizacao": "AMORTIZACAO",
     "bonificacao em ativos": "BONIFICACAO",
-    "direitos de subscricao - exercido": "SUBSCRICAO",
-    "direito de subscricao - exercido": "SUBSCRICAO",
     "fracao em ativos": "BONIFICACAO",
     "leilao de fracao": "VENDA",
 }
+
+# Renda fixa na Movimentação: o sentido vem de Entrada/Saída, não do rótulo.
+# "COMPRA / VENDA" é literalmente o texto que a B3 usa para aplicação em CDB.
+RF_MOVIMENTOS = ("aplicacao", "compra / venda", "resgate antecipado",
+                 "resgate", "vencimento", "resgate total", "resgate parcial")
+
+# A subscrição inteira fica pendente de lançamento manual. Ela anda em ativos
+# intermediários — direito (…11 vira …12), recibo (…13) — e as linhas nomeiam o
+# papel intermediário, não o que se recebe: "Direitos de Subscrição - Exercido"
+# aparece sobre o MXRF12, mas quem entra na carteira é o MXRF11. Registrar como
+# está enche a posição de fantasma (aconteceu numa importação real) e registra
+# o custo no ativo errado. O usuário lança a subscrição quando ela se converter.
+SUBSCRICAO = "subscricao"
 
 # Descartadas de propósito, com motivo — nunca em silêncio
 IGNORAR = {
@@ -150,13 +161,18 @@ def _linhas_xlsx(caminho: Path) -> list[list]:
 
     wb = load_workbook(caminho, read_only=True, data_only=True)
     try:
-        return [list(linha) for linha in wb[wb.sheetnames[0]].iter_rows(values_only=True)
+        planilha = wb[wb.sheetnames[0]]
+        # A planilha da B3 declara `<dimension ref="A1:A1"/>`, o que é mentira: o
+        # modo read_only acredita e devolve só a coluna A, então o cabeçalho
+        # chegava com um campo só e o arquivo era recusado como "não é da B3".
+        planilha.reset_dimensions()
+        return [list(linha) for linha in planilha.iter_rows(values_only=True)
                 if any(c is not None and str(c).strip() for c in linha)]
     finally:
         wb.close()
 
 
-def _tabela(caminho: Path) -> list[dict]:
+def _tabela(caminho: Path) -> tuple[list[dict], str]:
     """Acha o cabeçalho e devolve dicionários com as colunas normalizadas.
 
     O cabeçalho nem sempre é a primeira linha: a B3 às vezes põe título antes."""
@@ -165,7 +181,11 @@ def _tabela(caminho: Path) -> list[dict]:
     for i, linha in enumerate(cru[:15]):
         colunas = [_chave(str(c or "")) for c in linha]
         if "instituicao" in colunas and any("data" in c for c in colunas):
-            return [dict(zip(colunas, valores)) for valores in cru[i + 1:]]
+            corpo = cru[i + 1:]
+            # a convenção decimal é decidida uma vez, pelo arquivo inteiro: a
+            # planilha da B3 escreve em formato americano e o CSV em brasileiro
+            formato = textos.formato_numerico(c for l in corpo for c in l)
+            return [dict(zip(colunas, valores)) for valores in corpo], formato
     raise ArquivoNaoReconhecido(
         f"{caminho.name}: nenhum cabeçalho com 'Instituição' e 'Data' nas 15 "
         f"primeiras linhas — o arquivo é da Área do Investidor da B3?")
@@ -185,6 +205,8 @@ def classe_provavel(ticker: str) -> tuple[str, bool]:
 
     O sufixo 11 é ambíguo — FII, ETF e unit dividem o mesmo número — e a diferença
     muda a alíquota do IR. Nunca decidir sozinho nesse caso."""
+    if _CODIGO_RF.fullmatch(ticker.upper()) and not re.search(r"\d+$", ticker):
+        return "RF", False          # código de papel de renda fixa: CDB726AWP4H
     sufixo = re.search(r"(\d+)$", ticker)
     if not sufixo:
         return "", True
@@ -196,6 +218,20 @@ def classe_provavel(ticker: str) -> tuple[str, bool]:
     if digitos in SUFIXO_ACAO:
         return "ACAO", False
     return "", True
+
+
+_CODIGO_RF = re.compile(r"\b([A-Z]{2,}\d[A-Z0-9]{4,})\b")
+
+
+def _ticker_rf(produto: str) -> tuple[str, str]:
+    """`CDB - CDB726AWP4H - BANCO X` -> (`CDB726AWP4H`, `CDB … BANCO X`).
+
+    O separador é o mesmo da renda variável, mas aqui o **primeiro** pedaço é só
+    o tipo do papel: partir igual faria todo CDB virar o ticker `CDB`, fundindo
+    títulos diferentes numa posição só."""
+    achado = _CODIGO_RF.search(str(produto).upper())
+    nome = re.sub(r"\s+", " ", str(produto)).strip()
+    return (achado.group(1) if achado else ""), nome
 
 
 def _ticker(produto: str, mercado: str = "") -> tuple[str, str]:
@@ -224,7 +260,7 @@ def _hash(relatorio: str, campos: tuple, ocorrencia: int) -> str:
 
 # --------------------------------------------------------------------- leitura
 
-def _ler_negociacao(tabela: list[dict], conf: Conferencia) -> None:
+def _ler_negociacao(tabela: list[dict], conf: Conferencia, formato: str) -> None:
     _exigir(tabela, ("data do negocio", "tipo de movimentacao", "instituicao",
                      "codigo de negociacao", "quantidade", "preco"), "Negociação")
     conf.avisos.append(
@@ -241,12 +277,12 @@ def _ler_negociacao(tabela: list[dict], conf: Conferencia) -> None:
             data = _data(linha["data do negocio"])
             ticker, nome = _ticker(linha["codigo de negociacao"],
                                    str(linha.get("mercado") or ""))
-            qtd = _numero(linha["quantidade"])
-            preco = _numero(linha["preco"])
+            qtd = _numero(linha["quantidade"], formato)
+            preco = _numero(linha["preco"], formato)
         except (ValueError, KeyError) as e:
             conf.linhas.append(Linha(i, ERRO, motivo=str(e)))
             continue
-        valor = _numero(linha.get("valor")) or qtd * preco
+        valor = _numero(linha.get("valor"), formato) or qtd * preco
         instituicao = str(linha["instituicao"] or "").strip()
         campos = (movimento, data, ticker, instituicao, f"{qtd:.8f}", f"{valor:.2f}")
         chave = "|".join(campos)
@@ -256,7 +292,7 @@ def _ler_negociacao(tabela: list[dict], conf: Conferencia) -> None:
             _hash(NEGOCIACAO, campos, vistos[chave]), nome_ativo=nome))
 
 
-def _ler_movimentacao(tabela: list[dict], conf: Conferencia) -> None:
+def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> None:
     _exigir(tabela, ("entrada/saida", "data", "movimentacao", "produto",
                      "instituicao", "quantidade"), "Movimentação")
     vistos: dict[str, int] = {}
@@ -270,20 +306,37 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia) -> None:
                 i, PENDENTE, motivo="portabilidade: o arquivo não diz a instituição "
                                     "de destino — lance à mão para preservar o custo"))
             continue
-        tipo = TIPOS.get(movimento)
+        if SUBSCRICAO in movimento:
+            conf.linhas.append(Linha(
+                i, PENDENTE, ticker=_ticker(linha.get("produto", ""))[0],
+                data=_data(linha["data"]) if linha.get("data") else "",
+                motivo="subscrição: a linha nomeia o direito ou o recibo, não o ativo "
+                       "que entra na carteira — lance à mão, com o valor pago, quando "
+                       "ela se converter"))
+            continue
+
+        entrada = _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
+        renda_fixa = any(movimento.startswith(m) for m in RF_MOVIMENTOS)
+        tipo = ("COMPRA" if entrada else "VENDA") if renda_fixa else TIPOS.get(movimento)
         if tipo is None:
             conf.linhas.append(Linha(i, ERRO, motivo=f"movimentação desconhecida: "
                                                      f"{linha.get('movimentacao')!r}"))
             continue
         try:
             data = _data(linha["data"])
-            ticker, nome = _ticker(linha["produto"])
-            qtd = _numero(linha["quantidade"])
+            ticker, nome = (_ticker_rf(linha["produto"]) if renda_fixa
+                            else _ticker(linha["produto"]))
+            qtd = _numero(linha["quantidade"], formato)
         except (ValueError, KeyError) as e:
             conf.linhas.append(Linha(i, ERRO, motivo=str(e)))
             continue
-        preco = _numero(linha.get("preco unitario"))
-        valor = _numero(linha.get("valor da operacao")) or qtd * preco
+        if renda_fixa and not ticker:
+            conf.linhas.append(Linha(
+                i, ERRO, motivo=f"título de renda fixa sem código identificável em "
+                                f"{linha.get('produto')!r}"))
+            continue
+        preco = _numero(linha.get("preco unitario"), formato)
+        valor = _numero(linha.get("valor da operacao"), formato) or qtd * preco
         instituicao = str(linha["instituicao"] or "").strip()
         campos = (movimento, data, ticker, instituicao, f"{qtd:.8f}", f"{valor:.2f}")
         chave = "|".join(campos)
@@ -296,12 +349,13 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia) -> None:
 def ler(caminho: str | Path, conn) -> Conferencia:
     """Lê e confere. **Não grava nada** — quem grava é `gravar()`."""
     alvo = Path(caminho)
-    tabela = _tabela(alvo)
+    tabela, formato = _tabela(alvo)
     if not tabela:
         raise ArquivoNaoReconhecido(f"{alvo.name}: cabeçalho sem nenhuma linha abaixo")
     relatorio = NEGOCIACAO if "codigo de negociacao" in tabela[0] else MOVIMENTACAO
     conf = Conferencia(alvo.name, relatorio)
-    (_ler_negociacao if relatorio == NEGOCIACAO else _ler_movimentacao)(tabela, conf)
+    (_ler_negociacao if relatorio == NEGOCIACAO
+     else _ler_movimentacao)(tabela, conf, formato)
 
     ja_no_banco = {r[0] for r in conn.execute(
         "SELECT hash_origem FROM lancamentos WHERE hash_origem IS NOT NULL")}

@@ -3,6 +3,34 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.3.2] — 2026-08-03
+
+### Corrigido — a planilha da B3 não importava
+
+- **A planilha da B3 declara uma dimensão falsa** (`A1:A1`). O leitor acreditava
+  nela e enxergava só a primeira coluna, então o cabeçalho chegava com um campo
+  só e o arquivo era recusado como "não é da Área do Investidor da B3".
+- **A planilha usa ponto decimal**, ao contrário do CSV. O valor `9.919` de um
+  provento virava `9919` — mil vezes o real. A convenção decimal passou a ser
+  decidida **uma vez por arquivo**, pelo conjunto dos valores, em vez de
+  adivinhada número a número.
+- **Renda fixa na Movimentação** (`APLICAÇÃO`, `RESGATE ANTECIPADO`,
+  `COMPRA / VENDA`) era recusada como movimentação desconhecida. Agora entra, com
+  o sentido vindo de Entrada/Saída.
+- **O código do papel de renda fixa vinha errado**: em `CDB - CDB726AWP4H - BANCO`
+  o leitor pegava `CDB`, o que faria **todos os CDBs virarem o mesmo ativo**.
+
+### Mudado
+
+- **Subscrição fica pendente de lançamento manual.** As linhas nomeiam o direito
+  ou o recibo (`MXRF12`, `MXRF13`), não o ativo que entra na carteira — importar
+  como está criava posição fantasma e registrava o custo no ativo errado.
+- **Venda sem posição anterior não derruba mais a apuração.** O extrato da B3
+  cobre uma janela e a compra pode ser anterior a ela; um resgate órfão fazia a
+  carteira inteira sumir da tela. Agora a venda é ignorada, com aviso explícito
+  de que ficou fora da posição **e** do imposto — inventar o custo produziria
+  imposto errado.
+
 ## [0.3.1] — 2026-08-03
 
 ### Corrigido
@@ -167,6 +195,7 @@ operacionais e rentabilidade por XIRR. Saída em HTML timbrado e CSV.
 - **Rede desligada por padrão.** Com a cotação ligada, só o ticker sai daqui.
 - **Datas guardadas em ISO, mostradas em `dd/mm/aaaa`.**
 
+[0.3.2]: https://github.com/devtulio/peculium/releases/tag/v0.3.2
 [0.3.1]: https://github.com/devtulio/peculium/releases/tag/v0.3.1
 [0.3.0]: https://github.com/devtulio/peculium/releases/tag/v0.3.0
 [0.2.0]: https://github.com/devtulio/peculium/releases/tag/v0.2.0
