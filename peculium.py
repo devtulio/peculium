@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.6.0"
+VERSAO = "0.7.0"
 
 
 def raiz() -> Path:
@@ -656,6 +656,17 @@ class Api:
         resultado = renda_fixa.atualizar_curvas(self._conn)
         self._gravar()
         return {"series": vars(baixadas), "curvas": vars(resultado)}
+
+    @_resposta
+    @_exige_cofre
+    def atualizar_series(self) -> dict:
+        """Baixa as séries do BCB sem mexer nas curvas.
+
+        Existe separado de `atualizar_curvas` porque quem não tem renda fixa
+        também precisa da Selic — ela é o que fecha os juros de mora do DARF."""
+        resultado = series.baixar(self._conn)
+        self._gravar()
+        return vars(resultado)
 
     @_resposta
     @_exige_cofre

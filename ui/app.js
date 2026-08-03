@@ -760,24 +760,40 @@ function conferirNota(c) {
 
 async function verImpostos() {
   const d = await api('impostos');
+  // quem não tem renda fixa nunca abre a Carteira, e é lá que mora o botão que
+  // baixa as séries do BCB — sem este, a Selic dos juros nunca chegaria
+  $('#acoes-view').append(botao('Atualizar Selic', async () => {
+    const r = await tentar(() => api('atualizar_series'));
+    if (r.desligada)
+      return toast('Ligue a rede em Configurações para baixar as séries do BCB', true);
+    toast(`${r.gravados} valor(es) de série atualizado(s)`);
+    irPara('impostos');
+  }));
   const situacaoClasse = s =>
     s === 'PAGO' ? 'ok' : (s === 'VENCIDO' || s === 'PARCIAL' ? 'grave' : '');
 
   $('#view').innerHTML = `
     <div class="bloco" style="margin-bottom:1rem"><h3>Contas a pagar — DARF</h3>
       ${tabela(['Competência', 'Vencimento', 'Apurado', 'Pago', 'Situação',
-                'Atraso', 'Multa', 'Total a pagar', ''],
+                'Atraso', 'Multa', 'Juros', 'Total a pagar', ''],
         d.obrigacoes.map(o => [
           esc(o.competencia), esc(o.vencimento || '—'), brl(o.valor_apurado),
           o.valor_pago ? brl(o.valor_pago) : '—',
           `<span class="selo-situacao ${situacaoClasse(o.situacao)}">${o.situacao}</span>`,
           o.dias_atraso ? o.dias_atraso + ' dia(s)' : '—',
-          o.multa ? brl(o.multa) : '—', brl(o.total_a_pagar),
+          o.multa ? brl(o.multa) : '—',
+          // travessão não é zero: quer dizer que falta a Selic de algum mês, e a
+          // lista de avisos abaixo diz qual
+          o.juros == null
+            ? `<span class="selo-situacao grave" title="falta a Selic de algum mês do período">—</span>`
+            : brl(o.juros),
+          brl(o.total_a_pagar),
           o.total_a_pagar > 0
             ? `<button type="button" class="link" data-pagar="${esc(o.competencia)}"
-                 data-valor="${o.total_a_pagar}" data-multa="${o.multa || 0}">registrar pagamento</button>`
+                 data-valor="${o.total_a_pagar}" data-multa="${o.multa || 0}"
+                 data-juros="${o.juros || 0}">registrar pagamento</button>`
             : '']),
-        { numericas: [2, 3, 5, 6, 7], vazio: 'Nenhum DARF apurado' })}
+        { numericas: [2, 3, 5, 6, 7, 8], vazio: 'Nenhum DARF apurado' })}
       <ul class="aviso-lista">${d.obrigacoes.flatMap(o => o.observacoes || [])
         .map(t => `<li>${esc(t)}</li>`).join('')}</ul>
     </div>
@@ -801,11 +817,12 @@ async function verImpostos() {
     modal(`Pagamento do DARF ${b.dataset.pagar}`, `
       <div class="form-grade">
         <div class="campo"><label for="p-valor">Principal</label>
-          <input id="p-valor" value="${(Number(b.dataset.valor) - Number(b.dataset.multa)).toFixed(2)}"></div>
+          <input id="p-valor" value="${(Number(b.dataset.valor) - Number(b.dataset.multa)
+                                        - Number(b.dataset.juros)).toFixed(2)}"></div>
         <div class="campo"><label for="p-multa">Multa</label>
           <input id="p-multa" value="${Number(b.dataset.multa).toFixed(2)}"></div>
         <div class="campo"><label for="p-juros">Juros</label>
-          <input id="p-juros" value="0"></div>
+          <input id="p-juros" value="${Number(b.dataset.juros).toFixed(2)}"></div>
         <div class="campo"><label for="p-data">Data do pagamento</label>
           <input id="p-data" placeholder="dd/mm/aaaa"
             value="${new Date().toLocaleDateString('pt-BR')}"></div>

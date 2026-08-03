@@ -15,6 +15,7 @@ from datetime import date, datetime, timezone
 
 import fisco
 import razao
+import textos
 
 # Situações, da mais tranquila à mais urgente
 ACUMULANDO = "ACUMULANDO"     # abaixo do piso de R$ 10, ainda não é DARF
@@ -27,6 +28,55 @@ VENCIDO = "VENCIDO"
 # Lei 9.430/96 art. 61: multa de mora de 0,33% por dia de atraso, limitada a 20%.
 MULTA_DIA = 0.0033
 MULTA_TETO = 0.20
+
+# Art. 61 §3: juros equivalentes à **Selic acumulada mensalmente**, do mês
+# seguinte ao vencimento até o mês anterior ao do pagamento, mais 1% no mês do
+# pagamento. Somam-se taxas mensais — não se capitaliza dia a dia, e por isso a
+# série que serve é a 4390 (Selic acumulada no mês), não a 11 (Selic diária).
+JUROS_MES_DO_PAGAMENTO = 0.01
+SERIE_JUROS = "SELIC_MENSAL"
+
+
+def _mes(iso: str) -> tuple[int, int]:
+    return int(iso[:4]), int(iso[5:7])
+
+
+def _proximo_mes(ano: int, mes: int) -> tuple[int, int]:
+    return (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+
+
+def meses_de_juros(vencimento: str, pagamento: str) -> list[str]:
+    """Competências cuja Selic entra na conta: do mês **seguinte** ao vencimento
+    até o mês **anterior** ao do pagamento.
+
+    Pagar no mesmo mês do vencimento, ou no mês seguinte, não soma Selic nenhuma
+    — só o 1% do mês do pagamento. É o caso mais comum de DARF atrasado, e errar
+    aqui cobraria juros de um mês que a lei não cobra."""
+    ano, mes = _proximo_mes(*_mes(vencimento))
+    limite = _mes(pagamento)
+    meses = []
+    while (ano, mes) < limite:
+        meses.append(f"{ano:04d}-{mes:02d}")
+        ano, mes = _proximo_mes(ano, mes)
+    return meses
+
+
+def taxa_de_juros(conn, vencimento: str, pagamento: str) -> tuple[float, list[str]]:
+    """Percentual de juros e as competências que faltam na série.
+
+    Quando falta um mês, ele é **devolvido em vez de estimado**: juros a menos
+    dentro de guia de recolhimento é diferença que a Receita cobra depois."""
+    if pagamento <= vencimento:
+        return 0.0, []
+    taxas = {linha["data"][:7]: linha["valor"] for linha in conn.execute(
+        "SELECT data, valor FROM series WHERE indice=?", (SERIE_JUROS,))}
+    total, faltando = JUROS_MES_DO_PAGAMENTO, []
+    for competencia in meses_de_juros(vencimento, pagamento):
+        if competencia in taxas:
+            total += taxas[competencia] / 100.0     # a série vem em % ao mês
+        else:
+            faltando.append(competencia)
+    return (0.0, faltando) if faltando else (total, [])
 
 
 @dataclass
@@ -54,20 +104,22 @@ class Obrigacao:
 
 
 def encargos(valor: float, vencimento: str, pagamento: str,
-             selic_acumulada: float | None = None) -> tuple[int, float, float | None]:
+             conn=None) -> tuple[int, float, float | None]:
     """Devolve (dias de atraso, multa, juros).
 
-    A multa é determinística e está na lei. **Os juros não**: dependem da Selic
-    acumulada do período, que só existe no banco depois que a série do BCB for
-    importada (v1.1). Até lá o campo vem `None` e a tela mostra um traço —
-    inventar juros dentro de conta de imposto é exatamente o que este programa
-    não faz."""
+    A multa é determinística e está na lei. **Os juros dependem da Selic
+    acumulada do período**: sem a série do BCB importada, ou faltando um mês
+    dela, o campo vem `None` e a tela mostra um traço com a explicação. Juros a
+    menos numa guia de recolhimento é diferença que a Receita cobra depois —
+    melhor dizer que não sabe."""
     atraso = (date.fromisoformat(pagamento) - date.fromisoformat(vencimento)).days
     if atraso <= 0:
         return 0, 0.0, 0.0
     multa = round(valor * min(MULTA_DIA * atraso, MULTA_TETO), 2)
-    juros = None if selic_acumulada is None else round(valor * selic_acumulada, 2)
-    return atraso, multa, juros
+    if conn is None:
+        return atraso, multa, None
+    taxa, faltando = taxa_de_juros(conn, vencimento, pagamento)
+    return atraso, multa, (None if faltando else round(valor * taxa, 2))
 
 
 def _pagos(conn) -> dict[tuple[str, str], dict]:
@@ -101,10 +153,22 @@ def listar(conn, hoje: str | None = None) -> list[Obrigacao]:
             if hoje > darf.vencimento:
                 o.situacao = VENCIDO
                 o.dias_atraso, o.multa, o.juros = encargos(
-                    darf.valor, darf.vencimento, hoje)
+                    darf.valor, darf.vencimento, hoje, conn)
                 o.observacoes.append(
-                    "multa de mora de 0,33% ao dia (teto de 20%) calculada até hoje; "
-                    "juros dependem da série Selic, ainda não importada")
+                    "multa de mora de 0,33% ao dia (teto de 20%) calculada até hoje")
+                if o.juros is None:
+                    faltando = taxa_de_juros(conn, darf.vencimento, hoje)[1]
+                    o.observacoes.append(
+                        "juros de mora não calculados: falta a Selic de "
+                        + ", ".join(textos.competencia_br(c) for c in faltando)
+                        + ". Atualize as séries do Banco Central na Carteira"
+                        if faltando else
+                        "juros de mora não calculados: série Selic não importada")
+                else:
+                    o.observacoes.append(
+                        "juros pela Selic acumulada do mês seguinte ao vencimento "
+                        "até o anterior ao pagamento, mais 1% no mês do pagamento "
+                        "(Lei 9.430/96, art. 61 §3)")
             else:
                 o.situacao = PENDENTE
         else:

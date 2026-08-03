@@ -121,12 +121,16 @@ def _mover(ap: Apuracao, ativo_id: int, instituicao_id: int | None, qtd: float,
         return
     chave = (ativo_id, instituicao_id)
     saldo = ap.por_instituicao.get(chave, 0.0) + qtd
-    # saldo negativo numa corretora é quase sempre transferência não importada:
-    # a posição global fecha e o furo passaria batido sem este aviso
+    # saldo negativo numa corretora: a posição global fecha e o furo passaria
+    # batido sem este aviso. Duas causas possíveis, e o aviso não escolhe entre
+    # elas — desde que a portabilidade passou a ser importada sozinha, a causa
+    # mais comum deixou de ser a transferência e passou a ser a compra anterior,
+    # feita na corretora de origem antes do período do extrato
     if saldo < -EPS:
         ap.avisos.append(
             f"{data_br(data)}: {ticker or ativo_id} fica com saldo negativo "
-            f"({saldo:g}) na instituição {instituicao_id} — falta a transferência")
+            f"({saldo:g}) na instituição {instituicao_id} — falta a compra que "
+            f"pôs o papel lá, ou uma transferência de entrada")
     ap.por_instituicao[chave] = saldo
     if abs(saldo) < EPS:
         del ap.por_instituicao[chave]

@@ -144,3 +144,54 @@ def test_cofre_recusa_banco_corrompido(tmp_path):
 
     with pytest.raises(cofre.ArquivoInvalido):
         cofre.abrir(alvo, "senha")
+
+
+def test_venda_tributavel_gera_darf_com_multa_e_juros(tmp_path):
+    """O caminho que o acervo do usuário nunca exercitou: venda, IRRF e o DARF
+    que nasce dela, até os juros de mora.
+
+    Não substitui uma nota de venda de verdade — o que falta validar contra
+    documento real é o **leitor de PDF** de nota de venda, não este trecho. Aqui
+    a venda é lançada, e o que se prova é razão → fisco → obrigações."""
+    caminho = tmp_path / "carteira.pec"
+    c, _chave = cofre.criar(caminho, "senha mestra boa", LEVE)
+    with c:
+        conn = c.conn
+        conn.execute("INSERT INTO instituicoes (id, nome) VALUES (1,'XP')")
+        conn.execute("INSERT INTO ativos (id, ticker, nome, classe)"
+                     " VALUES (1,'PETR4','Petrobras','ACAO')")
+        lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1, instituicao=1,
+                    quantidade=1000, preco=30.0, custos=15.0)
+        # acima dos R$ 20 mil do mês: a isenção não alcança, e o ganho é tributado
+        lanc.lancar(conn, data="2026-02-10", tipo="VENDA", ativo=1, instituicao=1,
+                    quantidade=1000, preco=35.0, custos=18.0, irrf=1.75)
+        c.commit()
+
+        ap = razao.apurar(conn)
+        venda = ap.vendas[-1]
+        assert venda.natureza == "SWING"
+        assert venda.custo_base == pytest.approx(30_015.0)     # custo inclui a compra
+        assert venda.resultado == pytest.approx(35_000 - 18 - 30_015)
+        assert [p for p in ap.carteira() if p.ticker == "PETR4"] == []
+
+        (balde,) = [b for b in fisco.apurar(ap).baldes if b.competencia == "2026-02"]
+        assert balde.balde == "SWING"
+        assert balde.imposto == pytest.approx(balde.base * 0.15, abs=0.01)
+        assert balde.irrf == pytest.approx(1.75)               # o dedo-duro desconta
+        assert balde.a_pagar == pytest.approx(balde.imposto - 1.75, abs=0.01)
+
+        # Selic sintética dos meses que a lei manda somar (04 a 07); o DARF de
+        # 02/2026 vence em 31/03 e o pagamento é simulado em agosto
+        conn.executemany(
+            "INSERT INTO series (indice, data, valor) VALUES (?,?,?)",
+            [(obrigacoes.SERIE_JUROS, f"2026-{m}-01", 1.00) for m in
+             ("04", "05", "06", "07")])
+        (darf,) = [o for o in obrigacoes.listar(conn, hoje="2026-08-10")
+                   if o.competencia == "2026-02"]
+        assert darf.situacao == obrigacoes.VENCIDO
+        assert darf.vencimento == "2026-03-31"
+        assert darf.multa == pytest.approx(darf.valor_apurado * 0.20, abs=0.01)  # teto
+        # 4 meses × 1% + 1% do mês do pagamento
+        assert darf.juros == pytest.approx(darf.valor_apurado * 0.05, abs=0.01)
+        assert darf.total_a_pagar == pytest.approx(
+            darf.valor_apurado + darf.multa + darf.juros, abs=0.01)

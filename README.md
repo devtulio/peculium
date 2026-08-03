@@ -45,6 +45,10 @@ emolumentos, e sem eles o preço médio nasce errado — e o imposto atrás dele
 - **Renda fixa e Tesouro** — CDB, LCI, LCA e Tesouro Direto com **valor na curva**
   calculado das séries do Banco Central. IPCA+ pede preço à mão, porque depende do
   VNA oficial — e preço digitado sempre vence o calculado.
+- **DARF com multa e juros** — multa de mora de 0,33% ao dia (teto de 20%) e
+  juros pela Selic acumulada mensalmente, do mês seguinte ao vencimento até o
+  anterior ao pagamento, mais 1% no mês do pagamento (Lei 9.430/96, art. 61 §3).
+  Faltando um mês da série, recusa calcular e diz qual falta.
 - **Imposto de renda** — apuração mensal em baldes que não se compensam entre si,
   isenção dos R$ 20 mil sobre o valor bruto, prejuízo acumulado, IRRF que
   atravessa o mês e DARF com piso que acumula em vez de sumir. Renda fixa fica de

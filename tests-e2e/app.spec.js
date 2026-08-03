@@ -361,6 +361,34 @@ test.describe('apagar todos os dados', () => {
   });
 });
 
+test.describe('juros de mora do DARF', () => {
+  test('a coluna de juros aparece e entra no total', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="impostos"]');
+    const cabecalhos = page.locator('#view table').first().locator('th');
+    await expect(cabecalhos.nth(7)).toContainText('Juros');
+    await expect(page.locator('#view')).toContainText('1.529,85');   // 1500 + multa + juros
+    await expect(page.locator('#view')).toContainText('art. 61 §3');
+  });
+
+  test('o formulário de pagamento já vem com os juros', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="impostos"]');
+    await page.click('[data-pagar]');
+    await expect(page.locator('#p-juros')).toHaveValue('15.00');
+    await expect(page.locator('#p-multa')).toHaveValue('14.85');
+    // principal = total − multa − juros; antes o juros ficava embutido no principal
+    await expect(page.locator('#p-valor')).toHaveValue('1500.00');
+  });
+
+  test('dá para baixar a Selic sem passar pela Carteira', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="impostos"]');
+    await page.click('text=Atualizar Selic');
+    await expect(page.locator('#toast')).toContainText('série atualizado');
+  });
+});
+
 test.describe('configurações', () => {
   test('trocar o tema repinta a interface', async ({ page }) => {
     await destrancar(page);

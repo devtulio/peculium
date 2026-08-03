@@ -120,23 +120,70 @@ def test_liquidacao_de_negocio_e_descartada(tmp_path, conn):
     assert "já vêm no relatório de Negociação" in ignorada.motivo
 
 
-def test_portabilidade_fica_pendente_e_nao_some(tmp_path, conn):
-    """A portabilidade vem em duas linhas, uma por corretora; metade dela não
-    diz para onde o papel foi, então nenhuma das duas vira lançamento.
+def test_portabilidade_com_as_duas_pontas_vira_um_lancamento(tmp_path, conn):
+    """Débito na origem e crédito no destino: juntos dizem tudo que um
+    lançamento de transferência precisa, e o par vira **um** lançamento.
 
-    O que a linha diz — papel, data, quantidade, corretora e lado — vai junto:
-    sem isso o usuário tinha de abrir a planilha para saber o que lançar."""
+    A outra linha some da lista de novas — se as duas virassem lançamento, a
+    posição andaria duas vezes."""
     arq = csv_movimentacao(
         tmp_path,
         "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00",
         "Credito;01/06/2026;Transferência;PETR4 - PETROLEO;BETA;100;10,00;1.000,00")
-    saida, entrada = b3.ler(arq, conn).por_situacao(b3.PENDENTE)
-    assert (saida.ticker, saida.quantidade, saida.instituicao) == ("PETR4", 100, "ALFA")
-    assert "portabilidade de saída" in saida.motivo
-    assert entrada.instituicao == "BETA"
-    assert "portabilidade de entrada" in entrada.motivo
+    conf = b3.ler(arq, conn)
+    (nova,) = conf.por_situacao(b3.NOVA)
+    assert (nova.tipo, nova.ticker, nova.quantidade) == ("TRANSFERENCIA", "PETR4", 100)
+    assert (nova.instituicao, nova.destino) == ("ALFA", "BETA")
+    assert conf.por_situacao(b3.PENDENTE) == []
+    # o outro lado aparece como descartado COM MOTIVO: sumir em silêncio da
+    # conferência esconderia uma linha que o arquivo tinha
+    (ignorada,) = conf.por_situacao(b3.IGNORADA)
+    assert "o outro lado da mesma portabilidade" in ignorada.motivo
+    assert len(conf.linhas) == 2
+    # as duas corretoras entram no cadastro, não só a de origem
+    assert set(conf.instituicoes_novas) == {"ALFA", "BETA"}
+
+
+def test_portabilidade_com_uma_ponta_so_fica_pendente(tmp_path, conn):
+    """Metade da portabilidade não diz para onde o papel foi, e lançar assim
+    moveria a posição para o nada."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00")
+    (pendente,) = b3.ler(arq, conn).por_situacao(b3.PENDENTE)
+    assert (pendente.ticker, pendente.instituicao) == ("PETR4", "ALFA")
+    assert "sem o outro lado" in pendente.motivo
     # o alerta que evita o erro de achar que transferência repõe a compra
-    assert "não cria" in saida.motivo
+    assert "não cria" in pendente.motivo
+
+
+def test_portabilidades_de_papeis_diferentes_nao_se_cruzam(tmp_path, conn):
+    """O par casa por data, papel e quantidade — casar só por data juntaria
+    duas portabilidades do mesmo dia e trocaria as corretoras entre elas."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00",
+        "Credito;01/06/2026;Transferência;PETR4 - PETROLEO;BETA;100;10,00;1.000,00",
+        "Debito;01/06/2026;Transferência;VALE3 - VALE;GAMA;50;60,00;3.000,00",
+        "Credito;01/06/2026;Transferência;VALE3 - VALE;DELTA;50;60,00;3.000,00")
+    novas = {l.ticker: l for l in b3.ler(arq, conn).por_situacao(b3.NOVA)}
+    assert (novas["PETR4"].instituicao, novas["PETR4"].destino) == ("ALFA", "BETA")
+    assert (novas["VALE3"].instituicao, novas["VALE3"].destino) == ("GAMA", "DELTA")
+
+
+def test_transferencia_gravada_leva_a_corretora_de_destino(tmp_path, conn):
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00",
+        "Credito;01/06/2026;Transferência;PETR4 - PETROLEO;BETA;100;10,00;1.000,00")
+    conf = b3.ler(arq, conn)
+    assert b3.gravar(conn, conf, {"PETR4": "ACAO"}) == 1
+    linha = conn.execute(
+        "SELECT o.nome AS origem, d.nome AS destino FROM lancamentos l"
+        " JOIN instituicoes o ON o.id = l.instituicao_id"
+        " JOIN instituicoes d ON d.id = l.instituicao_destino_id"
+        " WHERE l.tipo='TRANSFERENCIA'").fetchone()
+    assert (linha["origem"], linha["destino"]) == ("ALFA", "BETA")
 
 
 def test_movimentacao_desconhecida_vira_erro(tmp_path, conn):
@@ -321,3 +368,41 @@ def test_coluna_essencial_faltando_falha_nomeando_a_coluna(tmp_path, conn):
                     "05/01/2026;ALFA;PETR4;100\n", encoding="utf-8")
     with pytest.raises(b3.ArquivoNaoReconhecido, match="tipo de movimentacao"):
         b3.ler(alvo, conn)
+
+
+def test_subscricao_orienta_por_subtipo(tmp_path, conn):
+    """Os seis subtipos exigem coisas diferentes do usuário, e só um deles vira
+    posição. Dizer "lance à mão" para todos era mandar ele descobrir qual."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;26/06/2026;Direito de Subscrição;MXRF12 - MAXI RENDA;ALFA;4;-;-",
+        "Debito;08/07/2026;Solicitação de Subscrição;MXRF12 - MAXI RENDA;ALFA;4;-;-",
+        "Credito;08/07/2026;Direitos de Subscrição - Exercido;MXRF12 - MAXI;ALFA;4;-;-",
+        "Credito;09/07/2026;Recibo de Subscrição;MXRF13 - MAXI RENDA;ALFA;4;-;-",
+        "Credito;14/07/2026;Direito Sobras de Subscrição;MXRF12 - MAXI;ALFA;54;-;-")
+    # duas linhas caem no mesmo dia e no mesmo papel: a chave é o nº da linha
+    pendentes = {l.n: l for l in b3.ler(arq, conn).por_situacao(b3.PENDENTE)}
+    assert len(pendentes) == 5
+
+    recibo = pendentes[5]
+    assert (recibo.ticker, recibo.quantidade) == ("MXRF13", 4)
+    assert "É ESTA a linha que vira posição" in recibo.motivo
+    assert "CONVERSÃO" in recibo.motivo  # o passo seguinte, quando o recibo virar cota
+
+    assert "nada a lançar" in pendentes[2].motivo      # direito
+    assert "nada a lançar" in pendentes[3].motivo      # solicitação
+    assert "linha de recibo" in pendentes[4].motivo    # exercido aponta para o recibo
+    assert "sobras" in pendentes[6].motivo
+
+
+def test_subscricao_nunca_vira_lancamento(tmp_path, conn):
+    """A regra que sustenta o tratamento: as linhas nomeiam o papel
+    intermediário, não o que entra na carteira. Importar como está enche a
+    posição de fantasma — aconteceu numa importação real."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;09/07/2026;Recibo de Subscrição;MXRF13 - MAXI RENDA;ALFA;4;-;-")
+    conf = b3.ler(arq, conn)
+    assert conf.novas == 0
+    assert b3.gravar(conn, conf) == 0
+    assert conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0] == 0

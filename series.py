@@ -31,8 +31,12 @@ HOST = "api.bcb.gov.br"
 TIMEOUT = 20
 
 # nome interno -> código da série no SGS
-SERIES = {"CDI": 12, "SELIC": 11, "IPCA": 433}
-DIARIAS = ("CDI", "SELIC")          # em % ao dia; IPCA é mensal
+SERIES = {"CDI": 12, "SELIC": 11, "IPCA": 433, "SELIC_MENSAL": 4390}
+DIARIAS = ("CDI", "SELIC")          # em % ao dia; IPCA e SELIC_MENSAL são mensais
+# A 4390 é a **Selic acumulada no mês**, em % ao mês, com um registro por mês
+# datado no dia 1º — conferido contra a API, não suposto. É a série que a Receita
+# usa para os juros de mora do art. 61 §3 da Lei 9.430/96; a 11 (Selic diária)
+# não serve, porque a lei manda somar taxas mensais, não capitalizar dias.
 
 
 class SerieIndisponivel(Exception):

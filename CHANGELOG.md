@@ -3,6 +3,41 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.7.0] — 2026-08-03
+
+### Adicionado
+
+- **Juros de mora do DARF** (Lei 9.430/96, art. 61 §3), a última conta de
+  imposto que estava declaradamente incompleta. Soma a Selic acumulada
+  mensalmente do mês seguinte ao vencimento até o anterior ao do pagamento, mais
+  1% no mês do pagamento — série 4390 do Banco Central, que é acumulada no mês;
+  a Selic diária, que o programa já usava para a curva, **não serve** aqui,
+  porque a lei manda somar taxas mensais e não capitalizar dias.
+  - **O caso mais comum não precisa de série nenhuma:** pagar dentro do mês
+    seguinte ao vencimento não fecha nenhum mês inteiro de atraso, então os
+    juros são só o 1%.
+  - **Faltando um mês da série, o programa recusa calcular** e diz qual falta.
+    Juros a menos numa guia é diferença que a Receita cobra depois.
+  - A tela de Impostos ganhou coluna de Juros e um botão **Atualizar Selic** —
+    quem não tem renda fixa nunca abriria a Carteira, que é onde ficava o único
+    botão que baixa séries do BCB.
+- **Portabilidade entre corretoras agora é importada sozinha.** Ela vem em duas
+  linhas (débito na origem, crédito no destino) e o leitor as pareia por data,
+  papel e quantidade; juntas viram um lançamento de transferência. Uma ponta só
+  continua pendente, porque metade da portabilidade não diz para onde o papel
+  foi.
+- **A subscrição passou a orientar por subtipo.** Ela continua não virando
+  lançamento — as linhas nomeiam o papel intermediário e nenhuma traz o valor
+  pago —, mas agora cada subtipo diz o que fazer, e **só o "Recibo de
+  Subscrição" vira posição**.
+
+### Mudado
+
+- O aviso de **saldo negativo numa corretora** dizia "falta a transferência".
+  Desde que a portabilidade é importada sozinha, a causa mais comum passou a ser
+  outra: a compra anterior, feita na corretora de origem antes do período do
+  extrato. O aviso agora nomeia as duas.
+
 ## [0.6.0] — 2026-08-03
 
 ### Adicionado

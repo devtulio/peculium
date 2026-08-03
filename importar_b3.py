@@ -97,6 +97,7 @@ class Linha:
     hash: str = ""
     motivo: str = ""
     nome_ativo: str = ""
+    destino: str = ""           # só em TRANSFERENCIA: a instituição que recebe
 
 
 @dataclass
@@ -282,42 +283,113 @@ def _ler_negociacao(tabela: list[dict], conf: Conferencia, formato: str) -> None
             _hash(NEGOCIACAO, campos, vistos[chave]), nome_ativo=nome))
 
 
+# A subscrição anda em ativos intermediários e nenhuma linha da B3 traz o valor
+# pago. O que muda entre os subtipos é o que o usuário precisa fazer — e dizer
+# "lance à mão" para os seis sem distinguir era mandar ele descobrir sozinho
+# quais dos seis realmente exigem alguma coisa.
+GUIA_SUBSCRICAO = {
+    "direito de subscricao":
+        "só o direito entrou na conta, nada a lançar. Se você exercer, o "
+        "lançamento é o do recibo",
+    "direito sobras de subscricao":
+        "direito de sobras: nada a lançar por si só",
+    "solicitacao de subscricao":
+        "pedido registrado, ainda sem efeito em posição — nada a lançar",
+    "direitos de subscricao - exercido":
+        "exercício confirmado: o papel entra como RECIBO, na linha de recibo "
+        "desta mesma importação. É lá que o valor pago é lançado",
+    "recibo de subscricao":
+        "É ESTA a linha que vira posição. Lance uma COMPRA do recibo com o "
+        "valor que você pagou — a B3 não informa o preço. Quando o recibo "
+        "virar a cota definitiva, registre uma CONVERSÃO em Eventos",
+}
+
+
+def _motivo_subscricao(movimento: str) -> str:
+    for chave, guia in GUIA_SUBSCRICAO.items():
+        if movimento.startswith(chave):
+            return f"subscrição — {guia}"
+    return ("subscrição: a linha nomeia o direito ou o recibo, não o ativo que "
+            "entra na carteira — lance à mão, com o valor pago, quando ela se "
+            "converter")
+
+
+def _parear_transferencias(coletadas: list[tuple[int, dict]], conf: Conferencia,
+                           formato: str) -> None:
+    """A portabilidade vem em duas linhas: débito na origem, crédito no destino.
+
+    Juntas, elas dizem tudo que um lançamento de transferência precisa, e o par
+    vira um lançamento só. **Uma linha sozinha continua pendente**: metade da
+    portabilidade não diz para onde o papel foi, e lançar assim moveria a posição
+    para o nada.
+
+    Transferência **move** posição entre corretoras, não cria. Se o papel veio de
+    uma corretora que o Peculium nunca viu, o que falta é a compra original — e
+    é o aviso de saldo negativo do razão que vai apontar isso."""
+    lados: dict[tuple, dict[str, tuple[int, dict]]] = {}
+    for i, linha in coletadas:
+        ticker = _ticker(linha.get("produto", ""))[0]
+        data = _data(linha["data"]) if linha.get("data") else ""
+        quantidade = _numero(linha.get("quantidade"), formato)
+        entrada = _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
+        chave = (data, ticker, round(quantidade, 8))
+        lados.setdefault(chave, {})[("entrada" if entrada else "saida")] = (i, linha)
+
+    vistos: dict[str, int] = {}
+    for (data, ticker, quantidade), par in lados.items():
+        saida, entrada = par.get("saida"), par.get("entrada")
+        if saida and entrada:
+            origem = str(saida[1].get("instituicao") or "").strip()
+            destino = str(entrada[1].get("instituicao") or "").strip()
+            campos = ("transferencia", data, ticker, origem, destino,
+                      f"{quantidade:.8f}")
+            chave = "|".join(campos)
+            vistos[chave] = vistos.get(chave, -1) + 1
+            conf.linhas.append(Linha(
+                saida[0], NOVA, "TRANSFERENCIA", data, ticker, origem, quantidade,
+                hash=_hash(MOVIMENTACAO, campos, vistos[chave]),
+                destino=destino,
+                motivo=f"portabilidade de {origem} para {destino}"))
+            conf.linhas.append(Linha(
+                entrada[0], IGNORADA,
+                motivo="o outro lado da mesma portabilidade, já lançada"))
+            continue
+        i, linha = saida or entrada
+        instituicao = str(linha.get("instituicao") or "").strip()
+        conf.linhas.append(Linha(
+            i, PENDENTE, ticker=ticker, data=data, instituicao=instituicao,
+            quantidade=quantidade,
+            motivo=(f"portabilidade {'de saída' if saida else 'de entrada'} sem o "
+                    f"outro lado no arquivo: não dá para saber a corretora "
+                    f"{'de destino' if saida else 'de origem'}. Lance à mão para "
+                    f"preservar o custo — e note que transferência move posição, "
+                    f"não cria: se o papel veio de corretora que o Peculium nunca "
+                    f"viu, o que falta é a compra original")))
+
+
 def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> None:
     _exigir(tabela, ("entrada/saida", "data", "movimentacao", "produto",
                      "instituicao", "quantidade"), "Movimentação")
     vistos: dict[str, int] = {}
+    transferencias: list[tuple[int, dict]] = []
     for i, linha in enumerate(tabela, start=2):
         movimento = _chave(str(linha.get("movimentacao") or ""))
         if movimento in IGNORAR:
             conf.linhas.append(Linha(i, IGNORADA, motivo=IGNORAR[movimento]))
             continue
         if movimento.startswith("transferencia"):
-            # A portabilidade vem em DUAS linhas: débito na origem, crédito no
-            # destino. Cada uma sozinha não diz para onde o papel foi, e lançar
-            # metade moveria a posição para o nada — por isso fica pendente. Mas
-            # a linha diz a instituição e o lado, e não dizer isso obrigava o
-            # usuário a abrir a planilha para descobrir o que lançar.
-            saida = not _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
-            instituicao = str(linha.get("instituicao") or "").strip()
-            conf.linhas.append(Linha(
-                i, PENDENTE, ticker=_ticker(linha.get("produto", ""))[0],
-                data=_data(linha["data"]) if linha.get("data") else "",
-                instituicao=instituicao,
-                quantidade=_numero(linha.get("quantidade"), formato),
-                motivo=(f"portabilidade {'de saída' if saida else 'de entrada'}: "
-                        f"lance a transferência à mão para preservar o custo. "
-                        f"Atenção: transferência **move** posição entre "
-                        f"corretoras, não cria — se o papel veio de uma corretora "
-                        f"que o Peculium nunca viu, o que falta é a compra "
-                        f"original, com o preço que você pagou lá")))
+            # A portabilidade vem em DUAS linhas — débito na origem, crédito no
+            # destino — e nenhuma delas sozinha diz para onde o papel foi. Aqui
+            # só se guarda; o pareamento acontece depois, com o arquivo inteiro
+            # lido, e é ele que decide entre lançar e deixar pendente.
+            transferencias.append((i, linha))
             continue
         if SUBSCRICAO in movimento:
             conf.linhas.append(Linha(
                 i, PENDENTE, ticker=_ticker(linha.get("produto", ""))[0],
                 data=_data(linha["data"]) if linha.get("data") else "",
-                motivo="subscrição: a linha nomeia o direito ou o recibo, não o ativo "
-                       "que entra na carteira — lance à mão, com o valor pago, quando "
-                       "ela se converter"))
+                quantidade=_numero(linha.get("quantidade"), formato),
+                motivo=_motivo_subscricao(movimento)))
             continue
 
         entrada = _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
@@ -350,6 +422,11 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> No
             i, NOVA, tipo, data, ticker, instituicao, qtd, preco, valor,
             _hash(MOVIMENTACAO, campos, vistos[chave]), nome_ativo=nome))
 
+    # depois do arquivo inteiro lido: só aí se sabe se as duas pontas de cada
+    # portabilidade estão presentes
+    _parear_transferencias(transferencias, conf, formato)
+    conf.linhas.sort(key=lambda l: l.n)
+
 
 def ler(caminho: str | Path, conn) -> Conferencia:
     """Lê e confere. **Não grava nada** — quem grava é `gravar()`."""
@@ -378,9 +455,10 @@ def ler(caminho: str | Path, conn) -> Conferencia:
             classe, confirmar = classe_provavel(l.ticker)
             conf.ativos_novos[l.ticker] = {"nome": l.nome_ativo, "classe": classe,
                                            "confirmar": confirmar}
-        if l.instituicao and l.instituicao.lower() not in instituicoes and \
-                l.instituicao not in conf.instituicoes_novas:
-            conf.instituicoes_novas.append(l.instituicao)
+        for nome_inst in (l.instituicao, l.destino):
+            if nome_inst and nome_inst.lower() not in instituicoes and \
+                    nome_inst not in conf.instituicoes_novas:
+                conf.instituicoes_novas.append(nome_inst)
     if any(a["confirmar"] for a in conf.ativos_novos.values()):
         conf.avisos.append(
             "Ticker terminado em 11 pode ser FII, ETF ou unit, e a classe muda a "
@@ -423,10 +501,11 @@ def gravar(conn, conf: Conferencia, classes: dict[str, str] | None = None) -> in
     for l in conf.por_situacao(NOVA):
         cur = conn.execute(
             "INSERT OR IGNORE INTO lancamentos (data, tipo, ativo_id, instituicao_id,"
-            " quantidade, preco, valor, origem, hash_origem, importacao_id, criado_em)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            " instituicao_destino_id, quantidade, preco, valor, origem, hash_origem,"
+            " importacao_id, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (l.data, l.tipo, ativos.get(l.ticker),
              instituicoes.get(l.instituicao.lower()),
+             instituicoes.get(l.destino.lower()) if l.destino else None,
              l.quantidade, l.preco, l.valor, origem, l.hash, importacao_id, agora))
         gravadas += cur.rowcount
     return gravadas

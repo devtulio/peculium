@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.6.0</title>
+<title>Manual Operacional — Peculium v0.7.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.6.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.7.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.6.0</div>
+  <div class="versao">VERSÃO 0.7.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.6.0.exe" --verificar</pre>
+<pre>"Peculium v0.7.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -459,6 +459,30 @@ importa. Inventar juros dentro de conta de imposto é o que este programa não f
   memória de cálculo para você conferir e pagar.
 </div>
 
+<h3>Multa e juros de atraso</h3>
+
+<p>DARF pago com atraso tem dois acréscimos, e o programa calcula os dois
+(Lei 9.430/96, art. 61):</p>
+
+<ul>
+  <li><strong>Multa de mora</strong>: 0,33% por dia de atraso, limitada a 20%.</li>
+  <li><strong>Juros</strong>: a Selic acumulada mês a mês, do mês
+    <em>seguinte</em> ao vencimento até o <em>anterior</em> ao do pagamento, mais
+    <strong>1% no mês do pagamento</strong>.</li>
+</ul>
+
+<p>Pagar ainda dentro do mês seguinte ao vencimento não fecha nenhum mês inteiro
+de atraso: os juros são só aquele 1%, e esse caso — o mais comum — sai completo
+sem precisar de internet.</p>
+
+<div class="aviso">
+  <strong>Faltando algum mês da Selic, o programa mostra um traço em vez de um
+  número</strong>, e diz qual mês falta. Juros a menos numa guia de recolhimento
+  é diferença que a Receita cobra depois — melhor dizer que não sabe. Use
+  <em>Atualizar Selic</em>, no topo da tela de Impostos, para baixar a série do
+  Banco Central.
+</div>
+
 <h2 id="relatorios">9. Relatórios</h2>
 
 <p>Dez relatórios, todos exportáveis em HTML timbrado (para imprimir) e CSV (para
@@ -504,6 +528,49 @@ lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.
   porque ela vazou, apague os backups antigos; do contrário eles seguem abrindo
   com a senha comprometida. A chave de recuperação continua valendo.
 </div>
+
+<h3>Portabilidade entre corretoras</h3>
+
+<p>A portabilidade aparece no relatório de Movimentação em <strong>duas
+linhas</strong>: débito na corretora de origem e crédito na de destino. O
+programa junta as duas e cria um lançamento de transferência sozinho.</p>
+
+<p>Quando só uma das pontas está no arquivo — porque o período exportado cortou a
+outra —, a linha fica pendente: metade da portabilidade não diz para onde o papel
+foi.</p>
+
+<div class="aviso">
+  <strong>Transferência move posição, não cria.</strong> Se o papel veio de uma
+  corretora que o Peculium nunca viu, a transferência sozinha deixa o saldo
+  negativo lá — e o aviso de saldo negativo é justamente isso: falta a
+  <em>compra</em> original, com o preço que você pagou naquela corretora.
+</div>
+
+<h3>Subscrição</h3>
+
+<p>A subscrição anda em papéis intermediários: o direito (o ticker termina em
+<code>12</code>), o recibo (<code>13</code>) e, no fim, a cota definitiva
+(<code>11</code>). <strong>Nenhuma linha da B3 traz o valor que você pagou</strong>,
+então nada disso vira lançamento automático — o programa não inventa o custo.</p>
+
+<p>O que ele faz é dizer, linha a linha, o que cabe a você:</p>
+
+<table>
+  <thead><tr><th>Linha</th><th>O que fazer</th></tr></thead>
+  <tbody>
+    <tr><td>Direito de Subscrição</td><td>nada — só o direito entrou na conta</td></tr>
+    <tr><td>Direito Sobras de Subscrição</td><td>nada por si só</td></tr>
+    <tr><td>Solicitação de Subscrição</td><td>nada — pedido sem efeito em posição</td></tr>
+    <tr><td>Direitos de Subscrição - Exercido</td><td>nada aqui; o lançamento é o do recibo</td></tr>
+    <tr><td>Não Exercido</td><td>nada</td></tr>
+    <tr><td><strong>Recibo de Subscrição</strong></td>
+      <td><strong>lance uma COMPRA do recibo</strong> com o valor pago</td></tr>
+  </tbody>
+</table>
+
+<p>Quando o recibo virar a cota definitiva, registre uma <strong>conversão</strong>
+em Lançamentos › Eventos: é o que transfere a quantidade e o custo do recibo para
+a cota, sem inventar compra nem venda.</p>
 
 <h3>Cadastros de ativos e instituições</h3>
 

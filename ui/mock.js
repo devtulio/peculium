@@ -53,14 +53,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.6.0', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.7.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.6.0' })
+        ? ok({ config, versao: '0.7.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.6.0' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.7.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -137,11 +137,14 @@
         obrigacoes: [{ competencia: '06/2026', codigo: '6015',
                        vencimento: '31/07/2026', valor_apurado: 1500,
                        valor_pago: 0, situacao: 'VENCIDO', dias_atraso: 3,
-                       multa: 14.85, juros: null, total_a_pagar: 1514.85,
-                       observacoes: ['multa de mora de 0,33% ao dia (teto de 20%); juros dependem da série Selic'] }],
+                       multa: 14.85, juros: 15.00, total_a_pagar: 1529.85,
+                       observacoes: ['multa de mora de 0,33% ao dia (teto de 20%) calculada até hoje',
+                                     'juros pela Selic acumulada do mês seguinte ao vencimento até o anterior ao pagamento, mais 1% no mês do pagamento (Lei 9.430/96, art. 61 §3)'] }],
         anos: ['2026'],
       }),
       pagar: () => ok({ id: 1 }),
+      atualizar_series: () => ok({ gravados: 7, falhas: {}, desligada: false,
+                                   cobertura: {} }),
       resetar: frase => (String(frase).trim().toUpperCase() === 'APAGAR TUDO'
         ? ok({ apagados: { ativos: 3, lancamentos: 41 }, total: 44,
                backup: 'C:\mock\peculium.pec.antes-do-reset-20260803-181500' })

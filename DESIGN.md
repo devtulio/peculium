@@ -385,6 +385,30 @@ Dois invariantes barram a nota que não fecha: `quantidade × PU = valor bruto` 
   identifica, o ticker é derivado de nome e vencimento e a conferência marca
   **derivado**.
 
+## 6.3.1 Portabilidade e subscrição na Movimentação
+
+**Portabilidade vem em duas linhas** — débito na origem, crédito no destino — e
+nenhuma delas sozinha diz para onde o papel foi. O leitor coleta as linhas de
+transferência e só as pareia **depois de ler o arquivo inteiro**, casando por
+data, papel e quantidade: casar só por data juntaria duas portabilidades do mesmo
+dia e trocaria as corretoras entre elas.
+
+Com as duas pontas, o par vira **um** lançamento de transferência (a outra linha
+aparece como descartada, com motivo — sumir em silêncio esconderia uma linha que
+o arquivo tinha). Com uma ponta só, fica pendente.
+
+**Transferência move posição, não cria.** Se o papel veio de uma corretora que o
+Peculium nunca viu, o que falta é a compra original — e quem aponta isso é o
+aviso de saldo negativo do razão, que por isso deixou de dizer "falta a
+transferência" e passou a nomear as duas causas possíveis.
+
+**Subscrição continua sem virar lançamento**, pelo motivo de sempre: as linhas
+nomeiam o papel intermediário (direito `…12`, recibo `…13`), não o que entra na
+carteira, e nenhuma traz o valor pago. O que mudou é a orientação: os seis
+subtipos exigem coisas diferentes, e **só o "Recibo de Subscrição" vira
+posição**. Dizer "lance à mão" para os seis sem distinguir era mandar o usuário
+descobrir qual.
+
 ## 6.4 Posição da B3 (`importar_posicao.py`) — retrato, não extrato
 
 A B3 exporta seis relatórios. Três interessam, e por motivos diferentes:
@@ -533,6 +557,27 @@ DARF), `PENDENTE`, `VENCIDO`, `PAGO`, `PARCIAL`, `A_MAIOR`.
   fica vazio — estimar juros dentro de conta de imposto é exatamente o que este
   programa não faz.
 - `a_vencer()` alimenta o alerta do painel: o que vence na janela mais o vencido.
+
+### 8.1.1 Juros de mora (Lei 9.430/96, art. 61 §3)
+
+A regra é somar a **Selic acumulada mensalmente**, do mês **seguinte** ao
+vencimento até o mês **anterior** ao do pagamento, e acrescentar **1% no mês do
+pagamento**. Somam-se taxas mensais; **não se capitaliza dia a dia** — por isso a
+série que serve é a **4390** (Selic acumulada no mês, % a.m.), e não a 11 (Selic
+diária), que o programa já usava para a curva da renda fixa. A distinção foi
+conferida contra a API do BCB, não suposta.
+
+Duas consequências que valem registrar:
+
+**O caso mais comum não precisa de série nenhuma.** Pagar dentro do mês seguinte
+ao vencimento não fecha nenhum mês inteiro de atraso: os juros são só o 1% do mês
+do pagamento. É o DARF esquecido por poucos dias, e ele passa a sair completo
+mesmo sem rede.
+
+**Faltando um mês da série, o programa recusa calcular** e diz qual mês falta, em
+vez de somar o que tem. Juros a menos numa guia de recolhimento é diferença que a
+Receita cobra depois — a regra da casa (nada estimado dentro de conta de imposto)
+vale para menos tanto quanto para mais.
 
 ## 8.2 Entrada manual (`lancamentos.py`)
 
