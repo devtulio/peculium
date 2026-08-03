@@ -230,7 +230,8 @@ async function verPainel() {
 /* ── carteira ──────────────────────────────────────────────────────────── */
 
 async function verCarteira() {
-  const linhas = await api('carteira');
+  const [linhas, rf, cad] = await Promise.all([
+    api('carteira'), api('renda_fixa'), cadastros()]);
   const mercado = linhas.reduce((s, p) => s + p.mercado, 0) || 1;
   $('#acoes-view').append(
     botao('Atualizar cotações', async () => {
@@ -238,7 +239,17 @@ async function verCarteira() {
       if (r.desligada) return toast('Cotação online está desligada nas configurações');
       toast(`${r.atualizadas} cotação(ões) atualizada(s), ${Object.keys(r.falhas).length} falha(s)`);
       irPara('carteira');
-    }));
+    }),
+    botao('Atualizar curvas', async () => {
+      const r = await tentar(() => api('atualizar_curvas'));
+      if (r.series.desligada)
+        return toast('Ligue a rede em Configurações para baixar as séries do BCB', true);
+      const falhas = Object.values(r.curvas.falhas);
+      toast(`${r.curvas.atualizados} curva(s) recalculada(s)` +
+            (falhas.length ? ` — ${falhas[0]}` : ''), falhas.length > 0);
+      irPara('carteira');
+    }),
+    botao('Novo título de renda fixa', () => formTitulo(cad, rf.indexadores)));
 
   $('#view').innerHTML = tabela(
     ['Ativo', 'Classe', 'Quantidade', 'Preço médio', 'Custo', 'Cotação',
@@ -254,6 +265,75 @@ async function verCarteira() {
         brl(100 * p.mercado / mercado) + '%'],
     })),
     { numericas: [2, 3, 4, 5, 6, 7, 8], vazio: 'Carteira vazia — importe ou lance uma compra' });
+
+  if (rf.posicao.length) $('#view').insertAdjacentHTML('beforeend', blocoRendaFixa(rf));
+}
+
+function blocoRendaFixa(rf) {
+  const semCurva = rf.posicao.filter(p => p.erro);
+  return `<div class="bloco" style="margin-top:1.4rem"><h3>Renda fixa e Tesouro</h3>
+    ${tabela(['Título', 'Emissor', 'Indexador', 'Vencimento', 'Quantidade',
+              'Custo', 'PU', 'Bruto', 'Rendimento'],
+      rf.posicao.map(p => ({
+        classe: p.vencido ? 'estornado' : '',
+        celulas: [esc(p.ticker), esc(p.emissor || '—'), esc(p.indexador),
+                  esc(p.vencimento ? p.vencimento.split('-').reverse().join('/') : '—'),
+                  qtd(p.quantidade), brl(p.custo),
+                  p.pu == null ? '—' : brl(p.pu), brl(p.bruto),
+                  sinal(p.rendimento)],
+      })), { numericas: [4, 5, 6, 7, 8] })}
+    <ul class="aviso-lista">
+      ${semCurva.map(p => `<li>${esc(p.ticker)}: ${esc(p.erro)}</li>`).join('')}
+      <li>O rendimento é bruto. O IR de renda fixa é retido na fonte pela tabela
+          regressiva — veja a estimativa no relatório de Renda fixa.</li>
+    </ul></div>`;
+}
+
+function formTitulo(cad, indexadores) {
+  const elegiveis = cad.ativos.filter(a => ['RF', 'TESOURO'].includes(a.classe));
+  if (!elegiveis.length) {
+    return modal('Nenhum ativo de renda fixa',
+      `<p>Cadastre antes um ativo com a classe <strong>RF</strong> ou
+       <strong>TESOURO</strong> em Configurações → Cadastros. O ticker pode ser o
+       código do papel que aparece na nota, como <code>CDB5267UW6V</code>.</p>`,
+      async () => {}, 'Entendi');
+  }
+  modal('Título de renda fixa', `
+    <div class="form-grade">
+      <div class="campo"><label for="t-ativo">Ativo</label>
+        <select id="t-ativo">${elegiveis.map(a =>
+          `<option value="${a.id}">${esc(a.ticker)}</option>`).join('')}</select></div>
+      <div class="campo"><label for="t-emissao">Emissão</label>
+        <input id="t-emissao" placeholder="dd/mm/aaaa"></div>
+      <div class="campo"><label for="t-venc">Vencimento</label>
+        <input id="t-venc" placeholder="dd/mm/aaaa"></div>
+      <div class="campo"><label for="t-index">Indexador</label>
+        <select id="t-index">${Object.entries(indexadores).map(([k, v]) =>
+          `<option value="${k}">${esc(v)}</option>`).join('')}</select></div>
+      <div class="campo"><label for="t-taxa">Taxa</label>
+        <input id="t-taxa" inputmode="decimal" placeholder="100"></div>
+      <div class="campo"><label for="t-pu">PU de emissão</label>
+        <input id="t-pu" inputmode="decimal" value="1"></div>
+      <div class="campo"><label for="t-emissor">Emissor</label>
+        <input id="t-emissor" placeholder="BANCO XP S.A."></div>
+      <div class="campo"><label for="t-isento">Isento de IR</label>
+        <select id="t-isento"><option value="0">Não</option>
+          <option value="1">Sim (LCI, LCA)</option></select></div>
+    </div>
+    <p class="trava-nota">A <strong>taxa</strong> é o percentual do CDI quando
+      pós-fixado (<code>100</code> para 100% do CDI) ou a taxa anual no prefixado.
+      O <strong>PU de emissão</strong> tem de ser o da nota: se ele não bater com o
+      preço da aplicação, a posição sai errada em ordem de grandeza.</p>`,
+    async dlg => {
+      await tentar(() => api('cadastrar_titulo', {
+        ativo_id: $('#t-ativo', dlg).value, emissao: $('#t-emissao', dlg).value,
+        vencimento: $('#t-venc', dlg).value, indexador: $('#t-index', dlg).value,
+        taxa: $('#t-taxa', dlg).value.replace(',', '.'),
+        pu_base: $('#t-pu', dlg).value.replace(',', '.'),
+        emissor: $('#t-emissor', dlg).value, isento: $('#t-isento', dlg).value,
+      }), 'Título cadastrado');
+      irPara('carteira');
+    }, 'Cadastrar');
 }
 
 /* ── lançamentos ───────────────────────────────────────────────────────── */

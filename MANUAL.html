@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.1.1</title>
+<title>Manual Operacional — Peculium v0.2.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.1.1 — Manual Operacional";
+    @top-center { content: "Peculium v0.2.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.1.1</div>
+  <div class="versao">VERSÃO 0.2.0</div>
 </div>
 
 <nav class="sumario">
@@ -97,6 +97,7 @@
     <li><a href="#painel">Painel</a></li>
     <li><a href="#carteira">Carteira e cotações</a></li>
     <li><a href="#lancamentos">Lançamentos e eventos</a></li>
+    <li><a href="#rendafixa">Renda fixa e Tesouro Direto</a></li>
     <li><a href="#importar">Importar da B3 e notas de corretagem</a></li>
     <li><a href="#impostos">Imposto de renda e contas a pagar</a></li>
     <li><a href="#relatorios">Relatórios</a></li>
@@ -125,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.1.1.exe" --verificar</pre>
+<pre>"Peculium v0.2.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -214,7 +215,75 @@ grupamento de 10:1 é <code>0,1</code>.</p>
 total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
 para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
 
-<h2 id="importar">6. Importar da B3 e notas de corretagem</h2>
+<h2 id="rendafixa">6. Renda fixa e Tesouro Direto</h2>
+
+<p>Um título de renda fixa é tratado como <strong>um ativo com preço unitário</strong>:
+a aplicação é uma compra e o resgate é uma venda. Com isso, quantidade, custo e
+posição funcionam igual ao resto da carteira.</p>
+
+<h3>Cadastrar o título</h3>
+<p>Primeiro crie o ativo em <strong>Configurações → Cadastros</strong> com a classe
+<strong>RF</strong> ou <strong>TESOURO</strong>. O ticker pode ser o código que
+aparece na nota, como <code>CDB5267UW6V</code>. Depois, em
+<strong>Carteira → Novo título de renda fixa</strong>, informe emissão,
+vencimento, indexador, taxa e o preço unitário de emissão.</p>
+
+<p>A <strong>taxa</strong> é o percentual do CDI quando pós-fixado
+(<code>100</code> para 100% do CDI) ou a taxa anual quando prefixado.</p>
+
+<div class="aviso">
+  <strong>O preço unitário de emissão tem de ser o da nota.</strong> Um CDB de
+  R$ 4,50 comprado como 450 unidades a R$ 0,01, cadastrado com o padrão de
+  R$ 1,00, vira uma posição de R$ 457 — cem vezes o valor. O custo continua
+  certo, então nada denuncia o erro além do rendimento absurdo. O programa
+  recusa o cadastro quando o preço de emissão não bate com o da aplicação na
+  mesma data, mas confira mesmo assim.
+</div>
+
+<h3>Valor na curva</h3>
+<p>O botão <strong>Atualizar curvas</strong>, na Carteira, baixa o que falta das
+séries do Banco Central e recalcula o preço de cada título. O rendimento passa a
+aparecer sozinho, dia a dia.</p>
+
+<p>Duas regras valem a pena conhecer:</p>
+<ul>
+  <li>O papel <strong>para de render no vencimento</strong>.</li>
+  <li>Fora da cobertura da série, o cálculo é <strong>recusado</strong> em vez de
+      devolver um número menor que a verdade. Se aparecer "atualize as séries",
+      é só clicar no botão.</li>
+</ul>
+
+<p><strong>Tesouro IPCA+ não tem curva calculável</strong> aqui: o preço depende
+do VNA oficial, que não se reconstrói com a série mensal do IPCA. Para esses,
+digite o preço unitário à mão — o preço digitado sempre vence o calculado.</p>
+
+<h3>Imposto</h3>
+<p>Renda fixa <strong>não entra na apuração mensal</strong> nem gera DARF: o
+imposto é retido na fonte pela tabela regressiva e é definitivo.</p>
+
+<table>
+  <tr><th>Prazo da aplicação</th><th>Alíquota</th></tr>
+  <tr><td>até 180 dias</td><td>22,5%</td></tr>
+  <tr><td>de 181 a 360 dias</td><td>20%</td></tr>
+  <tr><td>de 361 a 720 dias</td><td>17,5%</td></tr>
+  <tr><td>acima de 720 dias</td><td>15%</td></tr>
+</table>
+
+<p>LCI e LCA são isentas para pessoa física — marque a opção no cadastro.</p>
+
+<div class="aviso">
+  <strong>O IR mostrado é estimativa.</strong> Ele conta o prazo desde a emissão
+  do título e serve para conferir ordem de grandeza e planejar o resgate. O valor
+  retido de verdade vem no extrato da corretora, e é ele que deve ser lançado no
+  campo IRRF. Com aportes em datas diferentes, cada aplicação tem a sua própria
+  alíquota.
+</div>
+
+<p>Na declaração, esses rendimentos entram como <strong>tributação exclusiva na
+fonte</strong>, separados da apuração de renda variável. O relatório de Apuração
+de IR traz o total do ano no rodapé.</p>
+
+<h2 id="importar">7. Importar da B3 e notas de corretagem</h2>
 
 <p>Nada é gravado antes da sua conferência, e o arquivo original nunca é guardado:
 ele traz CPF.</p>
@@ -259,7 +328,7 @@ acrescenta os custos, estornando o lançamento antigo e gravando o corrigido.</p
 as variações usuais (três primeiros dígitos, três últimos, seis primeiros, CPF
 inteiro). Se a sua corretora usa outra senha, cadastre-a no campo ao lado.</p>
 
-<h2 id="impostos">7. Imposto de renda e contas a pagar</h2>
+<h2 id="impostos">8. Imposto de renda e contas a pagar</h2>
 
 <p>A apuração é mensal e separada em três baldes que <strong>não se compensam
 entre si</strong>:</p>
@@ -297,7 +366,7 @@ importa. Inventar juros dentro de conta de imposto é o que este programa não f
   memória de cálculo para você conferir e pagar.
 </div>
 
-<h2 id="relatorios">8. Relatórios</h2>
+<h2 id="relatorios">9. Relatórios</h2>
 
 <p>Nove relatórios, todos exportáveis em HTML timbrado (para imprimir) e CSV (para
 planilha):</p>
@@ -317,7 +386,7 @@ planilha):</p>
 
 <p>A impressão sai sempre em tema claro, qualquer que seja o tema da tela.</p>
 
-<h2 id="seguranca">9. Segurança, backup e senha</h2>
+<h2 id="seguranca">10. Segurança, backup e senha</h2>
 
 <h3>O que o cofre protege</h3>
 <p>Quem furta o computador ou lê o disco não passa do arquivo cifrado — nem o
@@ -342,7 +411,7 @@ lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.
   com a senha comprometida. A chave de recuperação continua valendo.
 </div>
 
-<h2 id="faq">10. Perguntas frequentes</h2>
+<h2 id="faq">11. Perguntas frequentes</h2>
 
 <h3>O patrimônio está diferente do que a corretora mostra</h3>
 <p>Confira, nesta ordem: ativos sem cotação (avaliados pelo preço médio), notas de

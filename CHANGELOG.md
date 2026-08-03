@@ -3,6 +3,47 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.2.0] — 2026-08-03
+
+### Renda fixa e Tesouro Direto
+
+Um título de renda fixa passa a ser tratado como **um ativo com preço unitário**:
+a aplicação é uma compra e o resgate é uma venda. Com isso, quantidade, custo e
+posição funcionam igual ao resto da carteira, e o que muda é só de onde vem a
+cotação.
+
+- **Valor na curva** calculado a partir das séries do Banco Central. Um botão só,
+  na Carteira, baixa o que falta da série e recalcula o preço de cada título.
+- Suporta **% do CDI** e **prefixado**. O papel para de render no vencimento.
+- **Fora da cobertura da série, o cálculo é recusado** em vez de devolver um
+  número menor que a verdade — patrimônio subavaliado em silêncio é pior que erro
+  visível.
+- **Tesouro IPCA+ pede preço à mão**: o preço depende do VNA oficial, que não se
+  reconstrói com a série mensal do IPCA. O preço digitado sempre vence o
+  calculado, e é assim que esses papéis entram.
+- **O cadastro recusa preço unitário de emissão que não bate com a aplicação.**
+  Um CDB de R$ 4,50 comprado como 450 unidades a R$ 0,01, cadastrado com o padrão
+  de R$ 1,00, viraria uma posição de R$ 457 — cem vezes o valor — com o custo
+  ainda certo, então nada denunciaria.
+- Relatório próprio, com rendimento e IR estimado por título.
+
+### Imposto de renda
+
+- **Renda fixa não entra mais na apuração mensal.** No balde de swing trade, um
+  resgate de CDB geraria DARF de 15% sobre rendimento que já foi tributado na
+  fonte — imposto pago duas vezes. Agora sai da apuração e entra a tabela
+  regressiva da Lei 11.033/2004.
+- A apuração anual passa a informar o total sujeito a **tributação exclusiva na
+  fonte**.
+- O IR de renda fixa é sempre apresentado como **estimativa**: ele conta o prazo
+  desde a emissão e serve para conferir ordem de grandeza. O valor retido de
+  verdade vem no extrato da corretora.
+
+### Interno
+
+- Primeira **migração de esquema** (v1 → v2). Ela se recusa a rodar se houver
+  dado no formato antigo, em vez de descartar.
+
 ## [0.1.1] — 2026-08-03
 
 ### Corrigido
@@ -84,5 +125,6 @@ operacionais e rentabilidade por XIRR. Saída em HTML timbrado e CSV.
 - **Rede desligada por padrão.** Com a cotação ligada, só o ticker sai daqui.
 - **Datas guardadas em ISO, mostradas em `dd/mm/aaaa`.**
 
+[0.2.0]: https://github.com/devtulio/peculium/releases/tag/v0.2.0
 [0.1.1]: https://github.com/devtulio/peculium/releases/tag/v0.1.1
 [0.1.0]: https://github.com/devtulio/peculium/releases/tag/v0.1.0

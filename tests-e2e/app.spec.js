@@ -115,6 +115,41 @@ test.describe('importação', () => {
   });
 });
 
+test.describe('renda fixa', () => {
+  test('aparece na carteira com PU e rendimento', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await expect(page.locator('#view')).toContainText('Renda fixa e Tesouro');
+    await expect(page.locator('#view')).toContainText('CDB5267UW6V');
+    await expect(page.locator('#view')).toContainText('100% do CDI');
+    await expect(page.locator('#view')).toContainText('15/05/2028');   // data em BR
+  });
+
+  test('título sem curva diz o que fazer em vez de mostrar número errado',
+    async ({ page }) => {
+      await destrancar(page);
+      await page.click('#menu button[data-view="carteira"]');
+      await expect(page.locator('.aviso-lista'))
+        .toContainText('informe o preço unitário à mão');
+    });
+
+  test('o formulário avisa sobre o PU de emissão', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await page.click('text=Novo título de renda fixa');
+    await expect(page.locator('#modal')).toBeVisible();
+    await expect(page.locator('#modal')).toContainText('ordem de grandeza');
+    await expect(page.locator('#t-ativo')).toBeVisible();
+  });
+
+  test('atualizar curvas relata as falhas', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await page.click('text=Atualizar curvas');
+    await expect(page.locator('#toast')).toContainText('curva(s) recalculada(s)');
+  });
+});
+
 test.describe('impostos', () => {
   test('DARF vencido aparece com multa e oferta de pagamento', async ({ page }) => {
     await destrancar(page);

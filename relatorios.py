@@ -216,6 +216,14 @@ def apuracao(conn, ano: int) -> Relatorio:
     if f.acumulado_pendente:
         rodape.append(f"Abaixo do piso, aguardando o próximo mês: "
                       f"R$ {brl(f.acumulado_pendente)}")
+    exclusiva = [v for v in f.exclusiva if v.data[:4] == str(ano)]
+    if exclusiva:
+        rodape.append(
+            f"Tributação exclusiva na fonte (renda fixa), {len(exclusiva)} "
+            f"resgate(s): rendimento de R$ "
+            f"{brl(sum(v.resultado for v in exclusiva))}, IRRF retido de R$ "
+            f"{brl(sum(v.irrf for v in exclusiva))} — declarar como rendimento "
+            f"sujeito a tributação exclusiva, fora desta apuração")
     for balde, saldo in f.prejuizo.items():
         if saldo:
             rodape.append(f"Prejuízo a compensar em {balde}: R$ {brl(saldo)}")
@@ -263,6 +271,43 @@ def obrigacoes(conn, hoje: str | None = None) -> Relatorio:
         ["Competência", "Código", "Vencimento", "Apurado", "Pago", "Data do pgto.",
          "Situação", "Dias em atraso", "Multa", "Juros", "Total a pagar"],
         linhas, rodape, numericas={3, 4, 7, 8, 9, 10}, avisos=avisos)
+
+
+def renda_fixa(conn, data: str | None = None) -> Relatorio:
+    import renda_fixa as _rf
+
+    linhas, custo_total, bruto_total = [], 0.0, 0.0
+    sem_curva = []
+    for p in _rf.posicao(conn, data):
+        custo_total += p["custo"]
+        bruto_total += p["bruto"]
+        ir = _rf.ir_estimado(conn, p["ativo_id"], data or date.today().isoformat(),
+                             p["rendimento"])
+        if p["erro"]:
+            sem_curva.append(f"{p['ticker']}: {p['erro']}")
+        linhas.append([
+            p["ticker"], p["emissor"] or "—", p["indexador"],
+            data_br(p["vencimento"]) or "—",
+            f"{p['quantidade']:g}", brl(p["custo"]),
+            brl(p["pu"]) if p["pu"] else "—", brl(p["bruto"]),
+            sinal(p["rendimento"]),
+            "isento" if p["isento"] else f"{ir['aliquota'] * 100:.1f}%",
+            brl(ir["imposto"]), brl(p["bruto"] - ir["imposto"])])
+
+    rel = Relatorio(
+        "Renda fixa e Tesouro",
+        ["Título", "Emissor", "Indexador", "Vencimento", "Quantidade", "Custo",
+         "PU", "Bruto", "Rendimento", "Alíquota", "IR estimado", "Líquido"],
+        linhas, numericas={4, 5, 6, 7, 8, 9, 10, 11},
+        rodape=[f"Custo total: R$ {brl(custo_total)}",
+                f"Valor bruto: R$ {brl(bruto_total)}",
+                f"Rendimento acumulado: R$ {sinal(bruto_total - custo_total)}"])
+    rel.avisos.append(
+        "O IR é estimativa pelo prazo desde a emissão: o valor retido de verdade "
+        "vem no extrato da corretora, e é ele que deve ser lançado. Com aportes "
+        "em datas diferentes, cada aplicação tem sua própria alíquota.")
+    rel.avisos += sem_curva
+    return rel
 
 
 def bens_direitos(conn, ano: int) -> Relatorio:

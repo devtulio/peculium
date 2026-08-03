@@ -25,9 +25,11 @@ import lancamentos
 import obrigacoes
 import razao
 import relatorios
+import renda_fixa
+import series
 import textos
 
-VERSAO = "0.1.1"
+VERSAO = "0.2.0"
 
 
 def raiz() -> Path:
@@ -471,6 +473,44 @@ class Api:
         self._gravar()
         return vars(resultado)
 
+    # ------------------------------------------------------------- renda fixa
+
+    @_resposta
+    @_exige_cofre
+    def renda_fixa(self) -> dict:
+        return {"posicao": renda_fixa.posicao(self._conn),
+                "titulos": [vars(t) | {"descricao": t.descricao(),
+                                       "vencido": t.vencido}
+                            for t in renda_fixa.listar(self._conn)],
+                "indexadores": renda_fixa.INDEXADORES,
+                "series": {i: series.cobertura(self._conn, i)
+                           for i in series.SERIES}}
+
+    @_resposta
+    @_exige_cofre
+    def cadastrar_titulo(self, dados: dict) -> dict:
+        limpos = _limpar(dados)
+        renda_fixa.cadastrar(
+            self._conn, ativo_id=int(limpos["ativo_id"]),
+            emissao=limpos["emissao"], indexador=limpos["indexador"],
+            taxa=float(limpos["taxa"]), pu_base=float(limpos.get("pu_base") or 1),
+            vencimento=limpos.get("vencimento"), emissor=limpos.get("emissor") or "",
+            isento=str(limpos.get("isento") or "0") == "1")
+        self._gravar()
+        return {"ativo_id": int(limpos["ativo_id"])}
+
+    @_resposta
+    @_exige_cofre
+    def atualizar_curvas(self) -> dict:
+        """Um botão só: busca o que falta da série do BCB e recalcula os PU.
+
+        A série vem primeiro porque sem ela a curva não avança — e o erro que o
+        usuário veria seria "atualize as séries", que é o que este botão faz."""
+        baixadas = series.baixar(self._conn)
+        resultado = renda_fixa.atualizar_curvas(self._conn)
+        self._gravar()
+        return {"series": vars(baixadas), "curvas": vars(resultado)}
+
     @_resposta
     @_exige_cofre
     def cotar_manual(self, ativo_id: int, data: str, valor: float) -> dict:
@@ -490,6 +530,7 @@ class Api:
         "apuracao": ("Apuração de IR",
                      lambda c, p: relatorios.apuracao(c, int(p["ano"]))),
         "obrigacoes": ("Contas a pagar — DARF", lambda c, p: relatorios.obrigacoes(c)),
+        "renda_fixa": ("Renda fixa e Tesouro", lambda c, p: relatorios.renda_fixa(c)),
         "bens": ("Bens e direitos",
                  lambda c, p: relatorios.bens_direitos(c, int(p["ano"]))),
         "operacoes": ("Operações",

@@ -35,9 +35,13 @@ emolumentos, e sem eles o preço médio nasce errado — e o imposto atrás dele
   idempotentes: reimportar períodos que se sobrepõem é o caso normal.
 - **Notas de corretagem** — leitura do PDF no layout Sinacor, com rateio dos
   custos e reconciliação com o que já veio da bolsa, sem duplicar negócio.
+- **Renda fixa e Tesouro** — CDB, LCI, LCA e Tesouro Direto com **valor na curva**
+  calculado das séries do Banco Central. IPCA+ pede preço à mão, porque depende do
+  VNA oficial — e preço digitado sempre vence o calculado.
 - **Imposto de renda** — apuração mensal em baldes que não se compensam entre si,
   isenção dos R$ 20 mil sobre o valor bruto, prejuízo acumulado, IRRF que
-  atravessa o mês e DARF com piso que acumula em vez de sumir.
+  atravessa o mês e DARF com piso que acumula em vez de sumir. Renda fixa fica de
+  fora: é tributada na fonte, pela tabela regressiva.
 - **Contas a pagar** — o que foi apurado contra o que foi pago, com multa de mora
   e alerta de vencimento.
 - **Relatórios** — nove, em HTML timbrado e CSV, incluindo o fluxo de caixa mensal

@@ -47,14 +47,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.1.0', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.2.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.1.0' })
+        ? ok({ config, versao: '0.2.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.1.0' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.2.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -75,9 +75,11 @@
       carteira: () => ok(CARTEIRA),
       listar_lancamentos: () => ok(LANCAMENTOS),
       cadastros: () => ok({
-        ativos: CARTEIRA.map(p => ({ id: p.ativo_id, ticker: p.ticker,
-                                     nome: null, classe: p.classe, ativo: 1 })),
+        ativos: [...CARTEIRA.map(p => ({ id: p.ativo_id, ticker: p.ticker,
+                                         nome: null, classe: p.classe, ativo: 1 })),
+                 { id: 4, ticker: 'CDB5267UW6V', nome: 'CDB Banco XP', classe: 'RF', ativo: 1 }],
         instituicoes: [{ id: 1, nome: 'XP INVESTIMENTOS', cnpj: '02332886000104', ativo: 1 }],
+        ativos_rf: true,
         tipos: ['COMPRA', 'VENDA', 'BONIFICACAO', 'SUBSCRICAO', 'DIVIDENDO', 'JCP',
                 'RENDIMENTO', 'AMORTIZACAO', 'TAXA', 'IRRF', 'TRANSFERENCIA'],
         eventos: ['DESDOBRAMENTO', 'GRUPAMENTO', 'CONVERSAO', 'INCORPORACAO'],
@@ -88,6 +90,29 @@
       cadastrar_ativo: () => ok({ id: 9 }),
       cadastrar_instituicao: () => ok({ id: 9 }),
       cotar: () => ok({ atualizadas: 2, ignoradas: 0, falhas: {}, desligada: false }),
+
+      renda_fixa: () => ok({
+        posicao: [
+          { ativo_id: 4, ticker: 'CDB5267UW6V', classe: 'RF', emissor: 'BANCO XP S.A.',
+            indexador: '100% do CDI', emissao: '2026-05-14', vencimento: '2028-05-15',
+            vencido: false, quantidade: 1000, custo: 1000, pu: 1.02897,
+            bruto: 1028.97, rendimento: 28.97, isento: false, erro: null },
+          { ativo_id: 5, ticker: 'TESOURO-IPCA-2035', classe: 'TESOURO', emissor: 'TESOURO NACIONAL',
+            indexador: 'IPCA + 6%', emissao: '2026-07-09', vencimento: '2035-05-15',
+            vencido: false, quantidade: 0.67, custo: 2079.12, pu: null,
+            bruto: 2079.12, rendimento: 0, isento: false,
+            erro: 'indexador IPCA não tem curva calculável: informe o preço unitário à mão' },
+        ],
+        titulos: [], indexadores: { CDI: '% do CDI', PRE: 'taxa anual prefixada',
+                                    IPCA: 'IPCA + taxa (preço digitado à mão)' },
+        series: { CDI: ['2026-01-02', '2026-07-30'], SELIC: null, IPCA: null },
+      }),
+      cadastrar_titulo: () => ok({ ativo_id: 4 }),
+      atualizar_curvas: () => ok({
+        series: { gravados: 12, falhas: {}, desligada: false },
+        curvas: { atualizados: 1, ignorados: 0,
+                  falhas: { 'TESOURO-IPCA-2035': 'informe o preço unitário à mão' } },
+      }),
 
       impostos: () => ok({
         ano: 2026,
