@@ -149,17 +149,13 @@ gerado** e o anexa à release.
 
 ## Sistemas irmãos
 
-Seis sistemas livres. Os cinco primeiros atendem à administração pública
-municipal; o Peculium é de uso pessoal e não tem relação com eles além da autoria
-e do rigor.
+Dois programas de desktop com a mesma arquitetura: Python + pywebview + SQLite,
+num executável só, sem servidor e sem porta de rede aberta. O Licitarium lê dados
+públicos; o Peculium guarda dados pessoais num cofre cifrado.
 
 | Sistema | Cuida de | |
 |---|---|---|
-| **SGCD** — Contratação Direta | dispensas de licitação, do pedido ao contrato | [repositório](https://github.com/devtulio/sgcd) |
-| **SGCA** — Contratos e Atas | contratos administrativos e atas de registro de preços | [repositório](https://github.com/devtulio/sgca) |
-| **SGDP** — Documentos da Procuradoria | leis, decretos, portarias, pareceres e ofícios | [repositório](https://github.com/devtulio/sgdp) |
-| **SGEA** — Estoque do Almoxarifado | entradas, saídas, lote e validade com FEFO | [repositório](https://github.com/devtulio/sgea) |
-| **Licitarium** — Repositório do PNCP | espelho local das contratações do município | [repositório](https://github.com/devtulio/licitarium) |
+| **Licitarium** — Repositório do PNCP | espelho local das contratações públicas do município | [repositório](https://github.com/devtulio/licitarium) |
 | **Peculium** — Patrimônio Pessoal | carteira de investimentos, custos e imposto | **(este)** |
 
 ---
