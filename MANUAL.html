@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.10.0</title>
+<title>Manual Operacional — Peculium v0.10.1</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.10.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.10.1 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.10.0</div>
+  <div class="versao">VERSÃO 0.10.1</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.10.0.exe" --verificar</pre>
+<pre>"Peculium v0.10.1.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -228,6 +228,31 @@ grupamento de 10:1 é <code>0,1</code>.</p>
 <p>Desdobramento e grupamento mudam a quantidade e <strong>não</strong> o custo
 total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
 para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
+
+<h3>“Título não cadastrado”: como resolver</h3>
+
+<p>Um papel de renda fixa aparece na carteira sem indexador nem taxa quando ele
+veio só do extrato da B3 — o relatório de posição deixa o <strong>indexador em
+branco</strong> na maioria dos CDBs, e a <strong>taxa nunca vem</strong>.</p>
+
+<p>Há dois caminhos, e o primeiro é bem mais curto:</p>
+
+<ol>
+  <li><strong>Importe a nota de renda fixa</strong> do papel. Ela traz indexador,
+    taxa, emissor, emissão, vencimento e o preço unitário — o título é cadastrado
+    inteiro, sem você digitar nada.</li>
+  <li><strong>Cadastre à mão</strong>, na Carteira, em <em>Novo título de renda
+    fixa</em>. Emissão, PU de emissão e emissor já vêm preenchidos da aplicação
+    que você lançou; falta informar indexador e taxa, que estão no aplicativo da
+    corretora.</li>
+</ol>
+
+<div class="aviso">
+  <strong>O Tesouro IPCA+ é exceção: cadastrar a taxa não resolve.</strong> A
+  curva dele depende do VNA oficial, que não se reconstrói da série mensal do
+  IPCA. O preço vem de <strong>importar a Posição da B3</strong>, ou de digitar o
+  preço unitário à mão — e preço digitado sempre vence o calculado.
+</div>
 
 <h3>Editar um lançamento</h3>
 

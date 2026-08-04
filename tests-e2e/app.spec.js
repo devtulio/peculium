@@ -284,6 +284,32 @@ test.describe('renda fixa', () => {
     await expect(page.locator('#t-ativo')).toBeVisible();
   });
 
+  test('o cadastro do título já vem preenchido do que foi lançado', async ({ page }) => {
+    // emissão e PU vêm da primeira aplicação: o PU é o campo que mais dói errar,
+    // porque erra a posição em ordem de grandeza e em silêncio
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await page.click('text=Novo título de renda fixa');
+    await expect(page.locator('#t-emissao')).toHaveValue('14/05/2026');
+    await expect(page.locator('#t-pu')).toHaveValue('1');
+    await expect(page.locator('#t-emissor')).toHaveValue('BANCO XP S.A.');
+    // o que falta é o que nenhum arquivo da B3 traz
+    await expect(page.locator('#modal-corpo')).toContainText('nenhum arquivo da B3 traz');
+  });
+
+  test('o IPCA+ avisa que cadastrar a taxa não resolve', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await page.click('text=Novo título de renda fixa');
+    await expect(page.locator('#t-dica')).toHaveText('');
+
+    await page.selectOption('#t-ativo', { label: 'TESOURO-IPCA-2035' });
+    await expect(page.locator('#t-dica')).toContainText('não tem curva calculável');
+    await expect(page.locator('#t-dica')).toContainText('Posição da B3');
+    // e a sugestão troca junto
+    await expect(page.locator('#t-pu')).toHaveValue('4158.25');
+  });
+
   test('atualizar curvas relata as falhas', async ({ page }) => {
     await destrancar(page);
     await page.click('#menu button[data-view="carteira"]');

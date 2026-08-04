@@ -3,6 +3,26 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.10.1] — 2026-08-04
+
+### Mudado — cadastrar título de renda fixa ficou menos trabalhoso
+
+O aviso "título não cadastrado" pedia indexador, taxa e PU de emissão, e o
+formulário abria vazio. Dois dos campos o sistema já sabia:
+
+- **Emissão, PU de emissão e emissor vêm preenchidos** da primeira aplicação já
+  lançada. O PU é justamente o campo que mais dói errar — ele erra a posição em
+  ordem de grandeza, e em silêncio.
+- **O Tesouro IPCA+ passou a dizer a verdade.** Cadastrar a taxa dele não faz o
+  preço aparecer: a curva depende do VNA oficial, que não se reconstrói da série
+  mensal do IPCA. O formulário avisa isso ao escolher o papel, e aponta o
+  caminho que funciona — importar a Posição da B3.
+
+Sobra informar **indexador e taxa**, que nenhum arquivo da B3 traz: o relatório
+de posição deixa o indexador em branco na maioria dos CDBs, e a taxa nunca vem.
+Quem tem a nota de renda fixa do papel não precisa de nada disso — importar a
+nota cadastra o título inteiro.
+
 ## [0.10.0] — 2026-08-04
 
 ### Adicionado — editar lançamento

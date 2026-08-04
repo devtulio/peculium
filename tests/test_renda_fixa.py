@@ -273,3 +273,41 @@ def test_relatorio_de_rf_nao_quebra_sem_cadastro(conn):
     linha = next(l for l in rel.linhas if l[0] == "LCI-INTER-2027")
     assert linha[9] == "—" and linha[10] == "—"   # alíquota e IR sem estimativa
     assert any("não cadastrado" in a for a in rel.avisos)
+
+
+def test_sugestao_vem_da_primeira_aplicacao(conn):
+    """Emissão e PU de emissão já estão lançados: fazer o usuário redigitá-los é
+    convidar o erro que mais dói — o PU errado erra a posição em ordem de
+    grandeza, e em silêncio."""
+    lanc.lancar(conn, data="2026-06-01", tipo="COMPRA", ativo=2, instituicao=1,
+                quantidade=50000, preco=0.01)
+    lanc.lancar(conn, data="2026-07-15", tipo="COMPRA", ativo=2, instituicao=1,
+                quantidade=1000, preco=0.0102)
+    s = rf.sugestao(conn, 2)
+    assert s["emissao"] == "2026-06-01"          # a PRIMEIRA, não a última
+    assert s["pu_base"] == pytest.approx(0.01)
+    assert s["sem_curva"] is False
+
+
+def test_sugestao_extrai_o_emissor_do_nome_da_b3(conn):
+    """A Movimentação nomeia o papel como "CDB - CDB726AM6KA - BANCO INTER S/A"."""
+    conn.execute("UPDATE ativos SET nome=? WHERE id=2",
+                 ("CDB - CDB726AM6KA - BANCO INTER S/A",))
+    assert rf.sugestao(conn, 2)["emissor"] == "BANCO INTER S/A"
+
+
+def test_sugestao_avisa_que_o_ipca_nao_tem_curva(conn):
+    """Cadastrar a taxa de um IPCA+ não faz o preço aparecer: a curva depende do
+    VNA oficial. Dizer isso na hora do cadastro evita o usuário procurar uma
+    taxa que não vai resolver o aviso."""
+    conn.execute("INSERT INTO ativos (id, ticker, classe)"
+                 " VALUES (9,'TESOURO-IPCA-JUROS-2037','TESOURO')")
+    assert rf.sugestao(conn, 9)["sem_curva"] is True
+    conn.execute("INSERT INTO ativos (id, ticker, classe)"
+                 " VALUES (10,'TESOURO-SELIC-2029','TESOURO')")
+    assert rf.sugestao(conn, 10)["sem_curva"] is False
+
+
+def test_sugestao_sem_aplicacao_nao_inventa(conn):
+    s = rf.sugestao(conn, 2)
+    assert s["emissao"] is None and s["pu_base"] is None

@@ -450,7 +450,8 @@ async function verCarteira() {
             (falhas.length ? ` — ${falhas[0]}` : ''), falhas.length > 0);
       irPara('carteira');
     }),
-    botao('Novo título de renda fixa', () => formTitulo(cad, rf.indexadores)));
+    botao('Novo título de renda fixa',
+          () => formTitulo(cad, rf.indexadores, rf.sugestoes || {})));
 
   $('#view').innerHTML = tabela(
     ['Ativo', 'Classe', 'Quantidade', 'Preço médio', 'Custo', 'Cotação',
@@ -490,7 +491,7 @@ function blocoRendaFixa(rf) {
     </ul></div>`;
 }
 
-function formTitulo(cad, indexadores) {
+function formTitulo(cad, indexadores, sugestoes = {}) {
   const elegiveis = cad.ativos.filter(a => ['RF', 'TESOURO'].includes(a.classe));
   if (!elegiveis.length) {
     return modal('Nenhum ativo de renda fixa',
@@ -521,6 +522,11 @@ function formTitulo(cad, indexadores) {
         <select id="t-isento"><option value="0">Não</option>
           <option value="1">Sim (LCI, LCA)</option></select></div>
     </div>
+    <p class="trava-nota" id="t-dica"></p>
+    <p class="trava-nota">Emissão, PU e emissor vêm da aplicação já lançada — o
+      que falta é o <strong>indexador</strong> e a <strong>taxa</strong>, que
+      nenhum arquivo da B3 traz. Pegue no aplicativo da corretora, ou importe a
+      nota de renda fixa do papel, que traz tudo.</p>
     <p class="trava-nota">A <strong>taxa</strong> é o percentual do CDI quando
       pós-fixado (<code>100</code> para 100% do CDI) ou a taxa anual no prefixado.
       O <strong>PU de emissão</strong> tem de ser o da nota: se ele não bater com o
@@ -535,6 +541,30 @@ function formTitulo(cad, indexadores) {
       }), 'Título cadastrado');
       irPara('carteira');
     }, 'Cadastrar');
+
+  /* Emissão e PU vêm da primeira aplicação lançada — e o PU é justamente o campo
+     que mais dói errar, porque erra a posição em ordem de grandeza. Deixar o
+     usuário redigitar o que o sistema já sabe é convidar o erro. */
+  const aplicar = () => {
+    const s = sugestoes[$('#t-ativo').value] || {};
+    if (s.emissao) $('#t-emissao').value = textoData(s.emissao);
+    if (s.pu_base != null) $('#t-pu').value = s.pu_base;
+    if (s.emissor) $('#t-emissor').value = s.emissor;
+    $('#t-dica').innerHTML = s.sem_curva
+      ? '<strong>Este papel não tem curva calculável.</strong> O IPCA+ depende do '
+        + 'VNA oficial, que não se reconstrói da série mensal do IPCA — cadastrar '
+        + 'a taxa não vai fazer o preço aparecer. O valor dele vem de importar a '
+        + '<strong>Posição da B3</strong>, ou de digitar o preço à mão.'
+      : '';
+  };
+  $('#t-ativo').addEventListener('change', aplicar);
+  aplicar();
+}
+
+/* `2026-06-01` -> `01/06/2026`: a sugestão vem em ISO, o campo espera BR. */
+function textoData(iso) {
+  const p = String(iso).slice(0, 10).split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(iso);
 }
 
 /* ── lançamentos ───────────────────────────────────────────────────────── */

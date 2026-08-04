@@ -194,6 +194,38 @@ def ir_estimado(conn, ativo_id: int, resgate: str, ganho: float) -> dict:
                           "de verdade vem no extrato da corretora"}
 
 
+def sugestao(conn, ativo_id: int) -> dict:
+    """O que o cadastro do título pode preencher sozinho, a partir do que já foi
+    lançado.
+
+    A primeira aplicação diz a **emissão** e o **PU de emissão** — que é o campo
+    que mais dói errar, porque o PU errado erra a posição em ordem de grandeza.
+    Sobra o usuário informar indexador e taxa, que nenhum arquivo da B3 traz.
+
+    Também devolve o vencimento e o emissor quando a importação da posição os
+    deixou no cadastro do ativo."""
+    linha = conn.execute(
+        "SELECT data, preco FROM lancamentos WHERE ativo_id=? AND tipo='COMPRA'"
+        "  AND preco > 0 AND estorna_id IS NULL"
+        "  AND id NOT IN (SELECT estorna_id FROM lancamentos"
+        "                 WHERE estorna_id IS NOT NULL)"
+        " ORDER BY data, id LIMIT 1", (ativo_id,)).fetchone()
+    ativo = conn.execute("SELECT ticker, nome, classe FROM ativos WHERE id=?",
+                         (ativo_id,)).fetchone()
+    nome = (ativo["nome"] or "") if ativo else ""
+    return {
+        "ativo_id": ativo_id,
+        "emissao": linha["data"] if linha else None,
+        "pu_base": linha["preco"] if linha else None,
+        # "CDB - CDB726AM6KA - BANCO INTER S/A" -> "BANCO INTER S/A"
+        "emissor": nome.split(" - ")[-1].strip() if " - " in nome else "",
+        # o IPCA+ não tem curva reconstruível: dizer isso na hora do cadastro
+        # evita o usuário procurar uma taxa que não vai resolver o aviso
+        "sem_curva": bool(ativo and ativo["classe"] == "TESOURO"
+                          and "IPCA" in (ativo["ticker"] or "").upper()),
+    }
+
+
 def posicao(conn, data: str | None = None) -> list[dict]:
     """Renda fixa em carteira com o valor na curva, para a tela e o relatório.
 

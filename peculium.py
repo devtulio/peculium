@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.10.0"
+VERSAO = "0.10.1"
 
 
 def raiz() -> Path:
@@ -721,10 +721,15 @@ class Api:
     @_resposta
     @_exige_cofre
     def renda_fixa(self) -> dict:
+        sem_titulo = [p["ativo_id"] for p in renda_fixa.posicao(self._conn)
+                      if p["erro"] and "não cadastrado" in p["erro"]]
         return {"posicao": renda_fixa.posicao(self._conn),
                 "titulos": [vars(t) | {"descricao": t.descricao(),
                                        "vencido": t.vencido}
                             for t in renda_fixa.listar(self._conn)],
+                # o que o formulário de cadastro consegue preencher sozinho
+                "sugestoes": {str(a): renda_fixa.sugestao(self._conn, a)
+                              for a in sem_titulo},
                 "indexadores": renda_fixa.INDEXADORES,
                 "series": {i: series.cobertura(self._conn, i)
                            for i in series.SERIES}}

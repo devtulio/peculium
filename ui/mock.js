@@ -56,14 +56,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.10.0', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.10.1', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.10.0' })
+        ? ok({ config, versao: '0.10.1' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.10.0' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.10.1' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -102,7 +102,9 @@
       cadastros: () => ok({
         ativos: [...CARTEIRA.map(p => ({ id: p.ativo_id, ticker: p.ticker,
                                          nome: null, classe: p.classe, ativo: 1 })),
-                 { id: 4, ticker: 'CDB5267UW6V', nome: 'CDB Banco XP', classe: 'RF', ativo: 1 }],
+                 { id: 4, ticker: 'CDB5267UW6V', nome: 'CDB Banco XP', classe: 'RF', ativo: 1 },
+                 { id: 5, ticker: 'TESOURO-IPCA-2035', nome: 'Tesouro IPCA+ 2035',
+                   classe: 'TESOURO', ativo: 1 }],
         instituicoes: [{ id: 1, nome: 'XP INVESTIMENTOS', cnpj: '02.332.886/0001-04', ativo: 1 }],
         ativos_rf: true,
         tipos: ['COMPRA', 'VENDA', 'BONIFICACAO', 'SUBSCRICAO', 'DIVIDENDO', 'JCP',
@@ -141,6 +143,13 @@
         ],
         titulos: [], indexadores: { CDI: '% do CDI', PRE: 'taxa anual prefixada',
                                     IPCA: 'IPCA + taxa (preço digitado à mão)' },
+        // o que o formulário preenche sozinho, da primeira aplicação lançada
+        sugestoes: {
+          4: { ativo_id: 4, emissao: '2026-05-14', pu_base: 1,
+               emissor: 'BANCO XP S.A.', sem_curva: false },
+          5: { ativo_id: 5, emissao: '2026-07-09', pu_base: 4158.25,
+               emissor: 'TESOURO NACIONAL', sem_curva: true },
+        },
         series: { CDI: ['2026-01-02', '2026-07-30'], SELIC: null, IPCA: null },
       }),
       cadastrar_titulo: () => ok({ ativo_id: 4 }),
