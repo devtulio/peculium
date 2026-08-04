@@ -247,3 +247,27 @@ def test_series_dos_graficos_do_painel(api):
     assert [a["competencia"] for a in d["aportes_mes"]] == ["JAN/26", "MAR/26"]
     # acumulado, não o do mês: o gráfico é de patrimônio investido
     assert [a["acumulado"] for a in d["aportes_mes"]] == [3005.0, 4605.0]
+
+
+def test_renomear_para_instituicao_existente_explica(api):
+    """Sem isto o usuário via "UNIQUE constraint failed: instituicoes.chave"."""
+    dados(api.criar_cofre("senha mestra boa"))
+    dados(api.cadastrar_instituicao({"nome": "XP INVESTIMENTOS CCTVM S/A"}))
+    outra = dados(api.cadastrar_instituicao({"nome": "BANCO INTER"}))["id"]
+    resposta = api.editar_instituicao(outra, {"nome": "XP Investimentos S.A."})
+    assert resposta["ok"] is False
+    assert "mesmo cadastro" in resposta["erro"]
+    assert "XP INVESTIMENTOS CCTVM S/A" in resposta["erro"]
+    # e nada foi alterado
+    assert {i["nome"] for i in dados(api.cadastros())["instituicoes"]} == {
+        "XP INVESTIMENTOS CCTVM S/A", "BANCO INTER"}
+
+
+def test_cofre_que_nao_migrou_avisa_no_painel(api, monkeypatch):
+    """Um toast de sete segundos é fraco demais para "telas novas podem falhar":
+    o alerta fica no painel enquanto durar."""
+    dados(api.criar_cofre("senha mestra boa"))
+    api._aberto.aviso_esquema = "o cofre não pôde ser atualizado (teste)"
+    alertas = dados(api.painel())["alertas"]
+    assert alertas[0]["tipo"] == "esquema" and alertas[0]["grave"] is True
+    assert "não pôde ser atualizado" in alertas[0]["texto"]

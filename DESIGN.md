@@ -169,6 +169,28 @@ linha que entrou por fora continua sendo encontrada. A coluna existe para o
 
 ## 4. Esquema SQLite
 
+### 4.1 Ordem das migrações — a regra que já quebrou um cofre
+
+**Migração que ACRESCENTA COLUNA a tabela existente roda ANTES do script do
+esquema.** Duas razões que se somam:
+
+* `CREATE TABLE IF NOT EXISTS` **não altera** tabela que já existe — a coluna
+  nova simplesmente não aparece;
+* o script cria índices sobre essas colunas, então ele estoura com
+  `no such column` **antes** de a migração ter chance de rodar.
+
+Foi o que aconteceu com a `chave` das instituições: o cofre de um usuário real
+parou de abrir inteiro, e a mensagem que chegou à tela foi
+`no such column: chave` na hora de gravar uma importação.
+
+**O teste não pegou** porque montava um cofre antigo **sem** a tabela
+`instituicoes` — ali o `CREATE TABLE` rodava de verdade e a coluna nascia junto.
+Migração de esquema tem de ser testada contra um banco que **já tem** a tabela,
+não contra um vazio. Migração que só mexe em DADO pode vir depois do script; a
+que mexe em FORMA, não.
+
+
+
 ```sql
 config        (chave TEXT PK, valor TEXT)   -- tema, paleta_daltonica, cotacao_online…
 instituicoes  (id INTEGER PK, nome TEXT, cnpj TEXT, ativo INT DEFAULT 1)

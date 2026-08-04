@@ -197,3 +197,80 @@ def test_conferencia_pendente_nao_sobrevive(api, tmp_path):
     api._conferencias["imp1"] = ("B3", object())
     dados(api.resetar("APAGAR TUDO"))
     assert api._conferencias == {}
+
+
+# --------------------------------------------------- migração de cofre antigo
+
+ESQUEMA_V3 = """
+CREATE TABLE config (chave TEXT PRIMARY KEY, valor TEXT);
+INSERT INTO config VALUES ('esquema','3');
+CREATE TABLE instituicoes (id INTEGER PRIMARY KEY, nome TEXT NOT NULL,
+                           cnpj TEXT, ativo INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE ativos (id INTEGER PRIMARY KEY, ticker TEXT NOT NULL UNIQUE,
+                     nome TEXT, classe TEXT NOT NULL, cnpj TEXT,
+                     ativo INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE lancamentos (id INTEGER PRIMARY KEY, data TEXT NOT NULL,
+  tipo TEXT NOT NULL, ativo_id INTEGER, instituicao_id INTEGER,
+  instituicao_destino_id INTEGER, quantidade REAL NOT NULL DEFAULT 0,
+  preco REAL NOT NULL DEFAULT 0, valor REAL NOT NULL DEFAULT 0,
+  custos REAL NOT NULL DEFAULT 0, irrf REAL NOT NULL DEFAULT 0, origem TEXT,
+  hash_origem TEXT UNIQUE, importacao_id INTEGER, nota_id INTEGER,
+  estorna_id INTEGER, obs TEXT, criado_em TEXT NOT NULL);
+INSERT INTO instituicoes (id,nome) VALUES (1,'XP INVESTIMENTOS CCTVM S/A');
+INSERT INTO instituicoes (id,nome) VALUES (2,'XP INVESTIMENTOS CCTVM S/A.');
+INSERT INTO instituicoes (id,nome,cnpj) VALUES (3,'XP INVESTIMENTOS','02332886000104');
+INSERT INTO instituicoes (id,nome) VALUES (4,'BANCO INTER S/A');
+INSERT INTO ativos (id,ticker,classe) VALUES (1,'PETR4','ACAO');
+INSERT INTO lancamentos (data,tipo,ativo_id,instituicao_id,quantidade,preco,valor,
+  criado_em) VALUES ('2026-01-05','COMPRA',1,2,100,10,1000,'x');
+INSERT INTO lancamentos (data,tipo,ativo_id,instituicao_id,quantidade,preco,valor,
+  criado_em) VALUES ('2026-02-05','COMPRA',1,3,50,10,500,'x');
+"""
+
+
+def _v3():
+    """Cofre da versão anterior: as tabelas JÁ existem, sem a coluna nova."""
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(ESQUEMA_V3)
+    return c
+
+
+def test_cofre_que_ja_tem_a_tabela_ganha_a_coluna_nova():
+    """A regressão que derrubou a importação de um usuário real.
+
+    `aplicar()` rodava o script do esquema ANTES da migração. `CREATE TABLE IF
+    NOT EXISTS` não altera tabela que já existe, então a coluna `chave` não
+    nascia — e a linha seguinte do script, que cria o índice sobre ela, estourava
+    com `no such column`. A migração que acrescentaria a coluna nunca chegava a
+    rodar, e o cofre abria quebrado.
+
+    O teste antigo não pegava porque montava um cofre **sem** a tabela
+    `instituicoes`: ali o `CREATE TABLE` rodava de verdade e a coluna vinha
+    junto."""
+    c = _v3()
+    esquema.aplicar(c)
+    assert "chave" in {x[1] for x in c.execute("PRAGMA table_info(instituicoes)")}
+    assert esquema.versao_do_banco(c) == esquema.VERSAO
+
+
+def test_migracao_funde_as_instituicoes_repetidas():
+    c = _v3()
+    esquema.aplicar(c)
+    linhas = list(c.execute("SELECT id, nome, chave, cnpj FROM instituicoes ORDER BY id"))
+    assert len(linhas) == 2                       # três grafias da XP viram uma
+    assert linhas[0]["chave"] == "xp investimentos"
+    # o CNPJ só existia na cópia que sumiu, e não pode sumir com ela
+    assert linhas[0]["cnpj"] == "02332886000104"
+    # e nenhum lançamento fica órfão
+    assert {r[0] for r in c.execute(
+        "SELECT DISTINCT instituicao_id FROM lancamentos")} == {linhas[0]["id"]}
+
+
+def test_migracao_e_idempotente():
+    """Abrir duas vezes não pode fundir de novo nem duplicar."""
+    c = _v3()
+    esquema.aplicar(c)
+    antes = [dict(r) for r in c.execute("SELECT * FROM instituicoes ORDER BY id")]
+    esquema.aplicar(c)
+    assert [dict(r) for r in c.execute("SELECT * FROM instituicoes ORDER BY id")] == antes

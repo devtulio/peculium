@@ -3,6 +3,30 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.9.2] — 2026-08-03
+
+### Corrigido — cofre da versão anterior não migrava, e a importação falhava
+
+- **`no such column: chave`.** A atualização do esquema rodava o script antes da
+  migração. `CREATE TABLE IF NOT EXISTS` não altera tabela que já existe, então
+  a coluna nova não nascia — e a linha seguinte do script, que cria o índice
+  sobre ela, estourava. A migração que acrescentaria a coluna nunca chegava a
+  rodar, e o cofre abria quebrado. **Migração que muda a forma da tabela passou
+  a rodar antes do script.**
+  - O teste não pegava porque montava um cofre antigo **sem** a tabela
+    `instituicoes`; ali o `CREATE TABLE` rodava de verdade. Agora há teste
+    contra um banco que **já tem** as tabelas.
+- **A migração ficou à prova de tabela faltando**: ela repontava lançamentos sem
+  checar se a tabela existia, e migração que estoura no meio degrada o cofre
+  inteiro — o que é pior que a duplicata que ela ia corrigir.
+
+### Mudado
+
+- **Cofre que não migrou agora avisa no painel, e não só num toast.** Sete
+  segundos é pouco para "telas novas podem falhar": o alerta fica enquanto durar.
+- **Renomear uma corretora para o nome de outra explica o que houve**, em vez de
+  mostrar `UNIQUE constraint failed: instituicoes.chave`.
+
 ## [0.9.1] — 2026-08-03
 
 ### Corrigido

@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.9.1"
+VERSAO = "0.9.2"
 
 
 def raiz() -> Path:
@@ -303,6 +303,12 @@ class Api:
         for aviso in ap.avisos:
             alertas.append({"tipo": "razao", "grave": True, "texto": aviso})
 
+        # um toast de sete segundos é fraco demais para "o cofre não migrou e
+        # telas novas podem falhar": o alerta fica no painel enquanto durar
+        if getattr(self._aberto, "aviso_esquema", ""):
+            alertas.insert(0, {"tipo": "esquema", "grave": True,
+                               "texto": self._aberto.aviso_esquema})
+
         conferencia = importar_posicao.ultima_conferencia(self._conn)
         divergencia = None
         if conferencia and conferencia.problemas:
@@ -503,10 +509,20 @@ class Api:
             raise ValueError("nome é obrigatório")
         documento = self._cnpj_ou_erro(dados.get("cnpj", atual["cnpj"]))
         ativo = int(bool(dados.get("ativo", atual["ativo"])))
+        chave = textos.nome_instituicao(nome)
+        colide = self._conn.execute(
+            "SELECT nome FROM instituicoes WHERE chave=? AND id<>?",
+            (chave, int(identificador))).fetchone()
+        if colide:
+            # sem isto o usuário via "UNIQUE constraint failed: instituicoes.chave"
+            raise ValueError(
+                f'"{nome}" é o mesmo cadastro que "{colide["nome"]}" — os dois '
+                f'reduzem ao mesmo nome depois de tirar acento, pontuação e '
+                f'forma societária. Use o que já existe, ou renomeie o outro '
+                f'antes')
         self._conn.execute(
             "UPDATE instituicoes SET nome=?, chave=?, cnpj=?, ativo=? WHERE id=?",
-            (nome, textos.nome_instituicao(nome), documento, ativo,
-             int(identificador)))
+            (nome, chave, documento, ativo, int(identificador)))
         lancamentos.auditar(self._conn, "INSTITUICAO_EDITADA",
                             f"#{identificador} {atual['nome']} → {nome}")
         self._gravar()

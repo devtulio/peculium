@@ -206,7 +206,10 @@ def _migrar_2(conn: sqlite3.Connection) -> None:
 
 
 def _migrar_4(conn: sqlite3.Connection) -> None:
-    """Preenche a chave das instituições e FUNDE as duplicadas.
+    """Acrescenta a coluna `chave`, preenche-a e FUNDE as instituições repetidas.
+
+    Roda **antes** do script do esquema — veja `aplicar()`. As duplicadas
+    precisam sumir antes também, senão o índice único do script esbarra nelas.
 
     Cofre feito antes desta versão tem a mesma corretora repetida — quatro
     grafias da XP num acervo real. Funde-se para a de menor id (a primeira
@@ -214,8 +217,12 @@ def _migrar_4(conn: sqlite3.Connection) -> None:
     apagar primeiro deixaria lançamento órfão."""
     import textos
 
-    if "chave" not in {c[1] for c in conn.execute("PRAGMA table_info(instituicoes)")}:
+    colunas = {c[1] for c in conn.execute("PRAGMA table_info(instituicoes)")}
+    if not colunas:
+        return                 # cofre sem a tabela: o script a cria já com a chave
+    if "chave" not in colunas:
         conn.execute("ALTER TABLE instituicoes ADD COLUMN chave TEXT")
+    tem_lancamentos = {c[1] for c in conn.execute("PRAGMA table_info(lancamentos)")}
 
     por_chave: dict[str, int] = {}
     for linha in conn.execute("SELECT id, nome FROM instituicoes ORDER BY id"):
@@ -224,10 +231,13 @@ def _migrar_4(conn: sqlite3.Connection) -> None:
             continue
         if chave in por_chave:
             manter = por_chave[chave]
-            conn.execute("UPDATE lancamentos SET instituicao_id=? WHERE instituicao_id=?",
-                         (manter, linha["id"]))
-            conn.execute("UPDATE lancamentos SET instituicao_destino_id=?"
-                         " WHERE instituicao_destino_id=?", (manter, linha["id"]))
+            # repontar ANTES de apagar: a ordem inversa deixaria lançamento
+            # órfão. E só nas tabelas que existem — migração que estoura no meio
+            # degrada o cofre inteiro, e isso é pior que a duplicata.
+            for coluna in ("instituicao_id", "instituicao_destino_id"):
+                if coluna in tem_lancamentos:
+                    conn.execute(f"UPDATE lancamentos SET {coluna}=?"
+                                 f" WHERE {coluna}=?", (manter, linha["id"]))
             # o CNPJ pode ter vindo só na cópia que vai sumir
             conn.execute(
                 "UPDATE instituicoes SET cnpj=coalesce(cnpj,"
@@ -238,16 +248,31 @@ def _migrar_4(conn: sqlite3.Connection) -> None:
             por_chave[chave] = linha["id"]
             conn.execute("UPDATE instituicoes SET chave=? WHERE id=?",
                          (chave, linha["id"]))
-    conn.executescript(ESQUEMA)          # o índice único só entra depois da fusão
 
 
 def aplicar(conn: sqlite3.Connection) -> None:
+    """Cria o que falta e migra o que existe. Idempotente.
+
+    **A ordem aqui é a regra que mais importa deste módulo.** Migração que
+    ACRESCENTA COLUNA a tabela existente tem de rodar ANTES do script, porque:
+
+    * `CREATE TABLE IF NOT EXISTS` **não altera** tabela que já existe — a
+      coluna nova simplesmente não aparece; e
+    * o script cria índices sobre essas colunas, então ele estoura com
+      `no such column` antes de a migração ter chance de rodar.
+
+    Foi exatamente o que aconteceu com a `chave` das instituições: o cofre de um
+    usuário real parou de abrir inteiro, e o teste não pegou porque montava um
+    cofre antigo **sem** a tabela `instituicoes` — aí o `CREATE TABLE` rodava de
+    verdade e a coluna nascia junto.
+
+    Migração que só mexe em DADO pode vir depois; a que mexe em FORMA, não."""
     atual = versao_do_banco(conn)
+    if atual and atual < 4:
+        _migrar_4(conn)
     conn.executescript(ESQUEMA)
     if atual and atual < 2:
         _migrar_2(conn)
-    if atual and atual < 4:
-        _migrar_4(conn)
     conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES ('esquema', ?)",
                  (str(VERSAO),))
 
