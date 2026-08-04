@@ -643,6 +643,30 @@ vez de somar o que tem. Juros a menos numa guia de recolhimento é diferença qu
 Receita cobra depois — a regra da casa (nada estimado dentro de conta de imposto)
 vale para menos tanto quanto para mais.
 
+### 8.2.1 Editar: anotar contra corrigir
+
+O usuário pede "editar lançamento", e a resposta honesta são **duas** operações,
+porque os campos não são todos da mesma natureza.
+
+**`anotar()` muda a observação no lugar.** É o único campo que pode: nada em
+posição, preço médio ou imposto depende dela. Alterar uma anotação não reescreve
+história nenhuma.
+
+**`corrigir()` estorna e relança.** Data, quantidade, preço, custos — tudo que é
+número é fato, e fato não se sobrescreve. As três linhas convivem no extrato: o
+original, o estorno que anula o efeito dele e o novo. É a regra append-only
+(§1.3) feita num passo só, em vez de dois manuais.
+
+Dois detalhes que o teste fixou:
+
+* **O `hash_origem` fica com o original.** Assim reimportar o mesmo arquivo
+  continua reconhecendo a linha como já vista, em vez de criar uma terceira
+  cópia.
+* **Mudar preço ou quantidade recalcula o valor** — em compra e venda o valor
+  gravado vence o cálculo, e sem isso a correção gravaria o preço novo com o
+  total velho. Em provento, não: ali o valor é o dado principal e a quantidade é
+  informativa.
+
 ## 8.2 Entrada manual (`lancamentos.py`)
 
 Único caminho de escrita no razão fora dos importadores. Existe para a validação

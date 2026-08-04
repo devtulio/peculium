@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.9.3</title>
+<title>Manual Operacional — Peculium v0.10.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.9.3 — Manual Operacional";
+    @top-center { content: "Peculium v0.10.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.9.3</div>
+  <div class="versao">VERSÃO 0.10.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.9.3.exe" --verificar</pre>
+<pre>"Peculium v0.10.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -228,6 +228,26 @@ grupamento de 10:1 é <code>0,1</code>.</p>
 <p>Desdobramento e grupamento mudam a quantidade e <strong>não</strong> o custo
 total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
 para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
+
+<h3>Editar um lançamento</h3>
+
+<p>Clique em <strong>detalhes</strong>, na linha. O que se pode fazer ali são
+duas coisas diferentes, e a diferença importa.</p>
+
+<p><strong>A observação muda no lugar.</strong> É anotação livre — "aporte do
+13º", "ordem parcial", "conferido com o extrato" — e não entra em nenhum
+cálculo. Por isso é o único campo que pode ser alterado sem mais nada.</p>
+
+<p><strong>Qualquer número usa <em>Corrigir valores</em>.</strong> Data,
+quantidade, preço, custos: o lançamento é estornado e um novo entra no lugar.</p>
+
+<div class="aviso">
+  <strong>Nada é sobrescrito, e isso é de propósito.</strong> O original, o
+  estorno e o lançamento novo continuam os três visíveis no extrato. O que o
+  imposto apurou ontem tem de continuar conferível — se a linha fosse reescrita,
+  a apuração de um mês fechado mudaria sozinha e você não teria como saber por
+  quê. Informe o motivo da correção: ele fica na auditoria.
+</div>
 
 <h2 id="rendafixa">6. Renda fixa e Tesouro Direto</h2>
 

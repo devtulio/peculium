@@ -213,3 +213,112 @@ def test_aquisicao_sem_custo_entra_como_bonificacao(conn):
                 instituicao=1, quantidade=1, valor=0)
     (p,) = razao.carteira(conn)
     assert (p.quantidade, p.custo_total, p.preco_medio) == (1, 0.0, 0.0)
+
+
+# ------------------------------------------- editar: anotar vs corrigir
+
+def test_anotar_muda_so_a_observacao(conn):
+    """Observação é anotação, não fato: nada em posição, preço médio ou imposto
+    depende dela, e por isso é o único campo que muda no lugar."""
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0)
+    antes = razao.carteira(conn)
+
+    lanc.anotar(conn, ident, "  aporte do 13º  ")
+    linha = conn.execute("SELECT * FROM lancamentos WHERE id=?", (ident,)).fetchone()
+    assert linha["obs"] == "aporte do 13º"          # espaços das pontas somem
+    # nenhum lançamento novo, nenhum estorno, posição idêntica
+    assert conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0] == 1
+    assert [(p.ticker, p.quantidade, p.custo_total) for p in razao.carteira(conn)] \
+        == [(p.ticker, p.quantidade, p.custo_total) for p in antes]
+    assert conn.execute(
+        "SELECT count(*) FROM auditoria WHERE acao='ANOTAR'").fetchone()[0] == 1
+
+
+def test_anotar_vazio_limpa(conn):
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0, obs="algo")
+    lanc.anotar(conn, ident, "   ")
+    assert conn.execute("SELECT obs FROM lancamentos WHERE id=?",
+                        (ident,)).fetchone()[0] is None
+
+
+def test_corrigir_estorna_e_relanca(conn):
+    """Número é fato, e fato não se sobrescreve: o original continua no extrato,
+    o estorno anula o efeito dele e o novo entra com o valor certo."""
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0)
+    r = lanc.corrigir(conn, ident, preco=10.5, custos=8.22,
+                      motivo="faltavam os custos da nota")
+
+    # as três linhas convivem: original, estorno e novo
+    assert conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0] == 3
+    assert conn.execute("SELECT estorna_id FROM lancamentos WHERE id=?",
+                        (r["estorno"],)).fetchone()[0] == ident
+    (p,) = razao.carteira(conn)
+    assert p.quantidade == 100
+    assert p.custo_total == pytest.approx(1058.22)   # 100 × 10,50 + 8,22
+
+    # o que não foi passado vem do original
+    novo = conn.execute("SELECT * FROM lancamentos WHERE id=?", (r["novo"],)).fetchone()
+    assert (novo["data"], novo["tipo"], novo["quantidade"]) == ("2026-01-05",
+                                                                "COMPRA", 100)
+    assert conn.execute(
+        "SELECT count(*) FROM auditoria WHERE acao='CORRIGIR'").fetchone()[0] == 1
+
+
+def test_corrigir_recusa_campo_que_nao_existe(conn):
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0)
+    with pytest.raises(lanc.DadoInvalido, match="não corrigível"):
+        lanc.corrigir(conn, ident, hash_origem="x")
+
+
+def test_corrigir_duas_vezes_usa_o_lancamento_novo(conn):
+    """Corrigir o que já foi corrigido é corrigir o estornado — e isso o estorno
+    já barra. A segunda correção tem de partir do lançamento novo."""
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0)
+    r = lanc.corrigir(conn, ident, preco=10.5)
+    with pytest.raises(lanc.DadoInvalido, match="já foi estornado"):
+        lanc.corrigir(conn, ident, preco=11.0)
+
+    r2 = lanc.corrigir(conn, r["novo"], preco=11.0)
+    (p,) = razao.carteira(conn)
+    assert p.custo_total == pytest.approx(1100.0)
+    assert r2["novo"] != r["novo"]
+
+
+def test_a_origem_diz_que_o_lancamento_e_correcao(conn):
+    ident = lanc.lancar(conn, data="2026-01-05", tipo="COMPRA", ativo=1,
+                        instituicao=1, quantidade=100, preco=10.0)
+    r = lanc.corrigir(conn, ident, preco=10.5)
+    assert conn.execute("SELECT origem FROM lancamentos WHERE id=?",
+                        (r["novo"],)).fetchone()[0] == f"CORRIGE_{ident}"
+
+
+def test_corrigir_preserva_o_hash_no_original(conn):
+    """O `hash_origem` fica com o original de propósito: assim reimportar o
+    mesmo arquivo continua reconhecendo a linha como já vista, em vez de criar
+    uma terceira cópia."""
+    conn.execute(
+        "INSERT INTO lancamentos (data, tipo, ativo_id, instituicao_id, quantidade,"
+        " preco, valor, origem, hash_origem, criado_em)"
+        " VALUES ('2026-01-05','COMPRA',1,1,100,10,1000,'B3_NEGOCIACAO','h1','x')")
+    ident = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    r = lanc.corrigir(conn, ident, custos=8.22)
+    assert conn.execute("SELECT hash_origem FROM lancamentos WHERE id=?",
+                        (ident,)).fetchone()[0] == "h1"
+    assert conn.execute("SELECT hash_origem FROM lancamentos WHERE id=?",
+                        (r["novo"],)).fetchone()[0] is None
+
+
+def test_corrigir_provento_nao_recalcula_o_valor(conn):
+    """Em provento o valor é o dado principal e a quantidade é informativa:
+    recalcular de quantidade × preço zeraria o lançamento."""
+    ident = lanc.lancar(conn, data="2026-05-15", tipo="RENDIMENTO", ativo=1,
+                        instituicao=1, valor=12.0)
+    r = lanc.corrigir(conn, ident, quantidade=100)
+    novo = conn.execute("SELECT quantidade, valor FROM lancamentos WHERE id=?",
+                        (r["novo"],)).fetchone()
+    assert (novo["quantidade"], novo["valor"]) == (100, 12.0)

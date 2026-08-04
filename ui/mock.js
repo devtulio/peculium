@@ -29,13 +29,16 @@
       custos: 0, origem: 'MANUAL' },
     { id: 3, data_br: '21/07/2026', tipo: 'COMPRA', ticker: 'KLBN4',
       instituicao: 'XP INVESTIMENTOS', quantidade: 200, preco: 3.5, valor: 700,
-      custos: 8.22, origem: 'NOTA', nota: '140560283' },
+      custos: 8.22, origem: 'NOTA', nota: '140560283',
+      ativo_id: 1, instituicao_id: 1, irrf: 0, obs: null },
     { id: 2, data_br: '18/05/2026', tipo: 'DIVIDENDO', ticker: 'MXRF11',
       instituicao: 'XP INVESTIMENTOS', quantidade: 0, preco: 0, valor: 12,
-      custos: 0, origem: 'MANUAL' },
+      custos: 0, origem: 'MANUAL', ativo_id: 2, instituicao_id: 1, irrf: 0,
+      obs: 'conferido com o informe' },
     { id: 1, data_br: '05/01/2026', tipo: 'COMPRA', ticker: 'MXRF11',
       instituicao: 'XP INVESTIMENTOS', quantidade: 100, preco: 9.71, valor: 971,
-      custos: 2.2, origem: 'B3_NEGOCIACAO', estornado_por: null },
+      custos: 2.2, origem: 'B3_NEGOCIACAO', estornado_por: null,
+      ativo_id: 2, instituicao_id: 1, irrf: 0, obs: null },
   ];
 
   const RELATORIO = {
@@ -53,14 +56,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.9.3', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.10.0', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.9.3' })
+        ? ok({ config, versao: '0.10.0' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.9.3' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.10.0' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -108,6 +111,10 @@
       }),
       lancar: () => ok({ id: 99 }),
       estornar: () => ok({ id: 100 }),
+      // contador para o teste provar que Esc NÃO executa a ação anterior
+      anotar: id => { window.__anotou = (window.__anotou || 0) + 1;
+                      return ok({ id }); },
+      corrigir: id => ok({ estorno: 101, novo: 102 }),
       registrar_evento: () => ok({ id: 5 }),
       cadastrar_ativo: () => ok({ id: 9 }),
       cadastrar_instituicao: () => ok({ id: 9 }),

@@ -210,6 +210,90 @@ def estornar(conn, lancamento_id: int, motivo: str = "") -> int:
     return identificador
 
 
+def anotar(conn, lancamento_id: int, obs: str) -> int:
+    """Muda a observação **no lugar**, e só ela.
+
+    Observação é anotação, não fato do razão: nada em posição, preço médio ou
+    imposto depende dela. Por isso é o único campo que pode ser alterado sem
+    estorno — mexer em data, quantidade ou preço é reescrever a história, e a
+    história é o que o imposto usa.
+
+    Quem precisa mudar um número usa `corrigir()`, que estorna e relança."""
+    linha = conn.execute("SELECT obs FROM lancamentos WHERE id=?",
+                         (lancamento_id,)).fetchone()
+    if linha is None:
+        raise DadoInvalido(f"lançamento {lancamento_id} não existe")
+    texto = str(obs or "").strip() or None
+    conn.execute("UPDATE lancamentos SET obs=? WHERE id=?", (texto, lancamento_id))
+    auditar(conn, "ANOTAR", f"#{lancamento_id}: "
+                            f"{linha['obs'] or '(vazio)'} -> {texto or '(vazio)'}")
+    return lancamento_id
+
+
+# Campos que são FATO: mudá-los é estorno e relançamento, nunca UPDATE.
+CORRIGIVEIS = ("data", "tipo", "ativo", "instituicao", "destino", "quantidade",
+               "preco", "valor", "custos", "irrf", "obs")
+
+
+def corrigir(conn, lancamento_id: int, *, motivo: str = "", **campos) -> dict:
+    """Estorna o lançamento e relança com o que mudou. Devolve os dois ids.
+
+    É a regra append-only feita num passo só: o original continua no extrato, o
+    estorno anula o efeito dele e o novo entra com os valores certos. Ninguém
+    sobrescreve linha nenhuma — o que o imposto viu ontem continua lá para ser
+    conferido.
+
+    O `hash_origem` fica com o original de propósito: assim reimportar o mesmo
+    arquivo continua reconhecendo a linha como já vista, em vez de criar uma
+    terceira cópia."""
+    original = conn.execute("SELECT * FROM lancamentos WHERE id=?",
+                            (lancamento_id,)).fetchone()
+    if original is None:
+        raise DadoInvalido(f"lançamento {lancamento_id} não existe")
+    desconhecidos = set(campos) - set(CORRIGIVEIS)
+    if desconhecidos:
+        raise DadoInvalido(f"campo não corrigível: {', '.join(sorted(desconhecidos))}")
+
+    novo = {
+        "data": campos.get("data", original["data"]),
+        "tipo": campos.get("tipo", original["tipo"]),
+        "ativo": campos.get("ativo", original["ativo_id"]),
+        "instituicao": campos.get("instituicao", original["instituicao_id"]),
+        "destino": campos.get("destino", original["instituicao_destino_id"]),
+        "quantidade": campos.get("quantidade", original["quantidade"]),
+        "preco": campos.get("preco", original["preco"]),
+        # o valor antigo NÃO pode sobreviver a uma mudança de preço ou
+        # quantidade: em compra e venda ele vence o cálculo, e a correção
+        # gravaria o preço novo com o total velho
+        "valor": _valor_corrigido(original, campos),
+        "custos": campos.get("custos", original["custos"]),
+        "irrf": campos.get("irrf", original["irrf"]),
+        "obs": campos.get("obs", original["obs"]) or "",
+    }
+    estorno = estornar(conn, lancamento_id,
+                       motivo or f"corrigido pelo lançamento seguinte")
+    identificador = lancar(conn, **novo)
+    conn.execute("UPDATE lancamentos SET origem=? WHERE id=?",
+                 (f"CORRIGE_{lancamento_id}", identificador))
+    auditar(conn, "CORRIGIR",
+            f"#{lancamento_id} -> #{identificador}"
+            f"{f': {motivo}' if motivo else ''}")
+    return {"estorno": estorno, "novo": identificador}
+
+
+def _valor_corrigido(original, campos: dict):
+    """Devolve `None` quando o valor tem de ser recalculado de quantidade × preço.
+
+    Só em compra e venda: em provento o valor é o dado principal e a quantidade
+    é informativa, então recalcular zeraria o lançamento."""
+    if "valor" in campos:
+        return campos["valor"]
+    tipo = campos.get("tipo", original["tipo"])
+    if tipo in NEGOCIO and ("quantidade" in campos or "preco" in campos):
+        return None
+    return original["valor"]
+
+
 def registrar_evento(conn, *, ativo, data_ex, tipo: str, fator: float,
                      destino=None, obs: str = "", hoje: str | None = None) -> int:
     """Evento corporativo. `fator` é sempre o multiplicador da QUANTIDADE:

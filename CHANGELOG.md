@@ -3,6 +3,37 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.10.0] — 2026-08-04
+
+### Adicionado — editar lançamento
+
+Clique em **detalhes**, na tela de Lançamentos. São **duas** operações, e a
+diferença entre elas é a regra do razão:
+
+- **Observação** muda no lugar. É anotação: nada em posição, preço médio ou
+  imposto depende dela, e por isso é o único campo que pode ser alterado sem
+  estorno. Aparece numa coluna nova da tabela.
+- **Corrigir valores** abre o formulário preenchido e, ao salvar, **estorna o
+  lançamento e relança**. Os dois continuam visíveis no extrato — o razão não
+  sobrescreve linha, porque o que o imposto apurou ontem tem de continuar
+  conferível. Aceita um motivo, que vai para a auditoria.
+
+O `hash_origem` fica com o lançamento original de propósito: assim reimportar o
+mesmo arquivo continua reconhecendo a linha como já vista, em vez de criar uma
+terceira cópia.
+
+### Corrigido
+
+- **O botão de confirmar não funcionava num diálogo aberto a partir de outro.**
+  O evento `close` de um `<dialog>` é disparado numa tarefa enfileirada, não na
+  hora; com um ouvinte por abertura, o `close` atrasado do primeiro consumia o
+  ouvinte do segundo. Agora o ouvinte é um só e ignora `close` que chegue com o
+  diálogo já reaberto.
+- **Corrigir preço ou quantidade não recalculava o valor.** Em compra e venda o
+  valor gravado vence o cálculo, então a correção gravava o preço novo com o
+  total velho. Em provento o valor continua sendo o dado principal e não é
+  recalculado.
+
 ## [0.9.3] — 2026-08-03
 
 ### Corrigido — todo CDB e o Tesouro entravam como AÇÃO

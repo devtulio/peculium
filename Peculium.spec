@@ -8,7 +8,7 @@ A `ui/` viaja dentro do pacote e é encontrada por `peculium.raiz()`, que lê
 """
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-VERSAO = "0.9.3"
+VERSAO = "0.10.0"
 
 a = Analysis(
     ["peculium.py"],

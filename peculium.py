@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.9.3"
+VERSAO = "0.10.0"
 
 
 def raiz() -> Path:
@@ -403,6 +403,23 @@ class Api:
         identificador = lancamentos.estornar(self._conn, int(lancamento_id), motivo)
         self._gravar()
         return {"id": identificador}
+
+    @_resposta
+    @_exige_cofre
+    def anotar(self, lancamento_id: int, obs: str) -> dict:
+        """Só a observação. Não mexe em posição, preço médio nem imposto."""
+        lancamentos.anotar(self._conn, int(lancamento_id), obs)
+        self._gravar()
+        return {"id": int(lancamento_id)}
+
+    @_resposta
+    @_exige_cofre
+    def corrigir(self, lancamento_id: int, dados: dict, motivo: str = "") -> dict:
+        """Estorna e relança. O original continua no extrato."""
+        resultado = lancamentos.corrigir(self._conn, int(lancamento_id),
+                                         motivo=motivo, **_limpar(dados))
+        self._gravar()
+        return resultado
 
     @_resposta
     @_exige_cofre

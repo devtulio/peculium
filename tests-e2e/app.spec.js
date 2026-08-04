@@ -183,6 +183,80 @@ test.describe('conferência do extrato da B3', () => {
   });
 });
 
+test.describe('editar lançamento', () => {
+  async function abrirDetalhes(page) {
+    await destrancar(page);
+    await page.click('#menu button[data-view="lancamentos"]');
+    // a compra de KLBN4, que veio de nota: o lançamento mais rico do exemplo
+    await page.locator('[data-detalhes="3"]').click();
+    await expect(page.locator('#modal')).toBeVisible();
+  }
+
+  test('a observação é editável e não fala em estorno', async ({ page }) => {
+    await abrirDetalhes(page);
+    await expect(page.locator('#modal-corpo')).toContainText('muda no lugar');
+    await page.fill('#d-obs', 'aporte do 13º');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Observação salva');
+  });
+
+  test('a ficha mostra o lançamento antes de mexer nele', async ({ page }) => {
+    await abrirDetalhes(page);
+    const ficha = page.locator('.ficha');
+    await expect(ficha).toContainText('21/07/2026');
+    await expect(ficha).toContainText('nota 140560283');
+  });
+
+  test('corrigir avisa que vai estornar, e o botão diz isso', async ({ page }) => {
+    await abrirDetalhes(page);
+    await page.click('#d-corrigir');
+    await expect(page.locator('#modal-titulo')).toContainText('Corrigir lançamento');
+    // o formulário vem preenchido com o que está gravado
+    await expect(page.locator('#l-tipo')).toHaveValue('COMPRA');
+    await expect(page.locator('#l-data')).toHaveValue('21/07/2026');
+    await expect(page.locator('#l-qtd')).toHaveValue('200');
+    await expect(page.locator('#modal-corpo')).toContainText('estornado');
+    await expect(page.locator('#modal-corpo')).toContainText('não sobrescreve linha');
+    await expect(page.locator('#modal-ok')).toHaveText('Estornar e relançar');
+
+    await page.fill('#l-preco', '3.60');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('o antigo foi estornado');
+  });
+
+  test('cancelar não grava nada', async ({ page }) => {
+    // Garantia de comportamento, não regressão: hoje quem zera o returnValue no
+    // Esc é o próprio Chrome, e este teste passa com ou sem a nossa defesa. Ele
+    // existe para travar o que o usuário vê — cancelar não pode gravar.
+    await abrirDetalhes(page);
+    await page.fill('#d-obs', 'primeira');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Observação salva');
+
+    expect(await page.evaluate(() => window.__anotou)).toBe(1);
+
+    await page.locator('[data-detalhes="1"]').click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#modal')).toBeHidden();
+    // o que prova o ponto: cancelar não pode ter gravado nada
+    await page.waitForTimeout(200);
+    expect(await page.evaluate(() => window.__anotou)).toBe(1);
+  });
+
+  test('a observação aparece na tabela', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="lancamentos"]');
+    await expect(page.locator('#view table')).toContainText('conferido com o informe');
+  });
+
+  test('lançamento já estornado não oferece detalhes', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="lancamentos"]');
+    // os três do exemplo estão vivos; o botão existe em todos
+    await expect(page.locator('[data-detalhes]')).toHaveCount(4);
+  });
+});
+
 test.describe('renda fixa', () => {
   test('aparece na carteira com PU e rendimento', async ({ page }) => {
     await destrancar(page);

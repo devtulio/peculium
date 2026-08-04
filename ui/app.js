@@ -254,11 +254,28 @@ function modal(titulo, corpoHtml, aoConfirmar, rotuloOk = 'Confirmar') {
   $('#modal-corpo').innerHTML = corpoHtml;
   $('#modal-ok').textContent = rotuloOk;
   const dlg = $('#modal');
-  const aoFechar = async () => {
-    dlg.removeEventListener('close', aoFechar);
-    if (dlg.returnValue === 'ok') await aoConfirmar(dlg);
-  };
-  dlg.addEventListener('close', aoFechar);
+
+  // `close()` dispara o evento numa TAREFA ENFILEIRADA, não na hora. Com um
+  // ouvinte por abertura, fechar um diálogo para abrir outro no mesmo clique
+  // fazia o `close` atrasado consumir o ouvinte do diálogo NOVO — e o botão de
+  // confirmar dele não fazia nada. O ouvinte é um só, instalado uma vez, e
+  // quem muda é a ação guardada.
+  dlg._aoConfirmar = aoConfirmar;
+  if (!dlg._ligado) {
+    dlg._ligado = true;
+    dlg.addEventListener('close', async () => {
+      // um `close` que chega com o diálogo JÁ REABERTO é o do ciclo anterior,
+      // atrasado pela fila: mexer nele apagaria a ação do diálogo atual
+      if (dlg.open) return;
+      const acao = dlg._aoConfirmar;
+      dlg._aoConfirmar = null;
+      if (dlg.returnValue === 'ok' && acao) await acao(dlg);
+    });
+  }
+  // Defesa, não correção de bug observado: `close()` sem argumento NÃO zera o
+  // returnValue (medido), então um 'ok' antigo sobreviveria à reabertura. O Esc
+  // do Chrome zera por conta própria, mas depender disso é depender do motor.
+  dlg.returnValue = '';
   dlg.showModal();
   const primeiro = $('#modal-corpo input, #modal-corpo select');
   if (primeiro) primeiro.focus();
@@ -530,64 +547,126 @@ async function verLancamentos() {
 
   $('#view').innerHTML = tabela(
     ['Data', 'Tipo', 'Ativo', 'Instituição', 'Quantidade', 'Preço', 'Valor',
-     'Custos', 'Origem', ''],
+     'Custos', 'Origem', 'Observação', ''],
     linhas.map(l => ({
       classe: l.estornado_por || l.estorna_id ? 'estornado' : '',
       celulas: [
         esc(l.data_br), esc(l.tipo), esc(l.ticker || '—'), esc(l.instituicao || '—'),
         qtd(l.quantidade), brl(l.preco), brl(l.valor), brl(l.custos),
         esc(l.nota ? 'nota ' + l.nota : l.origem),
+        l.obs ? `<span title="${esc(l.obs)}">${esc(l.obs.slice(0, 32))}${
+          l.obs.length > 32 ? '…' : ''}</span>` : '—',
         (l.estorna_id || l.estornado_por) ? ''
-          : `<button type="button" class="link" data-estornar="${l.id}">estornar</button>`],
+          : `<button type="button" class="link" data-detalhes="${l.id}">detalhes</button>`],
     })),
     { numericas: [4, 5, 6, 7], vazio: 'Nenhum lançamento ainda' });
 
-  $$('[data-estornar]').forEach(b => b.addEventListener('click', () =>
+  $$('[data-detalhes]').forEach(b => b.addEventListener('click', () =>
+    formDetalhes(linhas.find(l => l.id === Number(b.dataset.detalhes)), cad)));
+}
+
+/* Duas operações, e a diferença entre elas É a regra do razão.
+
+   A observação é anotação: nada em posição, preço médio ou imposto depende
+   dela, então muda no lugar. Qualquer número é fato — e fato não se
+   sobrescreve, se estorna e relança, senão o que o imposto viu ontem some. */
+function formDetalhes(l, cad) {
+  if (!l) return;
+  modal(`Lançamento #${l.id} — ${l.tipo} ${l.ticker || ''}`, `
+    <dl class="ficha">
+      <div><dt>Data</dt><dd>${esc(l.data_br)}</dd></div>
+      <div><dt>Instituição</dt><dd>${esc(l.instituicao || '—')}</dd></div>
+      <div><dt>Quantidade</dt><dd>${qtd(l.quantidade)}</dd></div>
+      <div><dt>Preço</dt><dd>${brl(l.preco)}</dd></div>
+      <div><dt>Valor</dt><dd>${brl(l.valor)}</dd></div>
+      <div><dt>Custos</dt><dd>${brl(l.custos)}</dd></div>
+      <div><dt>IRRF</dt><dd>${brl(l.irrf)}</dd></div>
+      <div><dt>Origem</dt><dd>${esc(l.nota ? 'nota ' + l.nota : l.origem)}</dd></div>
+    </dl>
+    <div class="campo campo-largo"><label for="d-obs">Observação</label>
+      <input id="d-obs" value="${esc(l.obs || '')}"
+        placeholder="ex.: aporte do 13º, ordem parcial, conferido com o extrato">
+      <p class="trava-nota">Anotação livre. Não entra em nenhum cálculo — muda
+        no lugar, sem estornar nada.</p></div>
+    <p class="trava-nota">Para mudar <strong>data, quantidade, preço ou custos</strong>,
+      use <em>Corrigir valores</em>: o lançamento é estornado e um novo entra no
+      lugar, e os dois continuam visíveis no extrato. Número não se sobrescreve —
+      o que o imposto apurou ontem tem de continuar conferível.</p>
+    <menu style="display:flex;gap:.6rem;justify-content:flex-start;padding:0;margin:0">
+      <button type="button" class="secundario" id="d-corrigir">Corrigir valores…</button>
+      <button type="button" class="perigo" id="d-estornar">Estornar</button>
+    </menu>`,
+    async dlg => {
+      await tentar(() => api('anotar', l.id, $('#d-obs', dlg).value),
+        'Observação salva');
+      irPara('lancamentos');
+    }, 'Salvar observação');
+
+  $('#d-corrigir').addEventListener('click', () => {
+    $('#modal').close();
+    formLancamento(cad, l);
+  });
+  $('#d-estornar').addEventListener('click', () => {
+    $('#modal').close();
     modal('Estornar lançamento',
       `<p>O lançamento continua visível no extrato; o estorno anula o efeito dele.</p>
        <div class="campo"><label for="motivo">Motivo (opcional)</label>
        <input id="motivo"></div>`,
       async dlg => {
-        await tentar(() => api('estornar', Number(b.dataset.estornar),
-          $('#motivo', dlg).value), 'Lançamento estornado');
+        await tentar(() => api('estornar', l.id, $('#motivo', dlg).value),
+          'Lançamento estornado');
         irPara('lancamentos');
-      }, 'Estornar')));
+      }, 'Estornar');
+  });
 }
 
-function formLancamento(cad) {
-  const opcoes = (lista, valor = 'id', texto = 'nome') => lista.map(o =>
-    `<option value="${esc(o[valor])}">${esc(o[texto])}</option>`).join('');
-  modal('Novo lançamento', `
+function formLancamento(cad, original) {
+  // com `original`, o mesmo formulário vira correção: estorna e relança
+  const sel = (lista, atual, valor = 'id', texto = 'nome') => lista.map(o =>
+    `<option value="${esc(o[valor])}"${String(o[valor]) === String(atual)
+      ? ' selected' : ''}>${esc(o[texto])}</option>`).join('');
+  const opcoes = (lista, valor = 'id', texto = 'nome') => sel(lista, null, valor, texto);
+  const v = (campo, padrao = '') => (original ? original[campo] ?? padrao : padrao);
+  modal(original ? `Corrigir lançamento #${original.id}` : 'Novo lançamento', `
     <div class="form-grade">
       <div class="campo"><label for="l-tipo">Tipo</label>
         <select id="l-tipo">${cad.tipos.map(t =>
-          `<option value="${t}">${t}</option>`).join('')}</select></div>
+          `<option${t === v('tipo') ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
       <div class="campo"><label for="l-data">Data</label>
-        <input id="l-data" placeholder="dd/mm/aaaa"></div>
+        <input id="l-data" placeholder="dd/mm/aaaa" value="${esc(v('data_br'))}"></div>
       <div class="campo"><label for="l-ativo">Ativo</label>
         <select id="l-ativo"><option value="">—</option>
-          ${opcoes(cad.ativos, 'id', 'ticker')}</select></div>
+          ${sel(cad.ativos, v('ativo_id'), 'id', 'ticker')}</select></div>
       <div class="campo"><label for="l-inst">Instituição</label>
-        <select id="l-inst"><option value="">—</option>${opcoes(cad.instituicoes)}</select></div>
+        <select id="l-inst"><option value="">—</option>
+          ${sel(cad.instituicoes, v('instituicao_id'))}</select></div>
       <div class="campo"><label for="l-qtd">Quantidade</label>
-        <input id="l-qtd" inputmode="decimal"></div>
+        <input id="l-qtd" inputmode="decimal" value="${v('quantidade', '')}"></div>
       <div class="campo"><label for="l-preco">Preço</label>
-        <input id="l-preco" inputmode="decimal"></div>
+        <input id="l-preco" inputmode="decimal" value="${v('preco', '')}"></div>
       <div class="campo"><label for="l-valor">Valor</label>
-        <input id="l-valor" inputmode="decimal"></div>
+        <input id="l-valor" inputmode="decimal" value="${v('valor', '')}"></div>
       <div class="campo"><label for="l-custos">Custos</label>
-        <input id="l-custos" inputmode="decimal"></div>
+        <input id="l-custos" inputmode="decimal" value="${v('custos', '')}"></div>
       <div class="campo"><label for="l-irrf">IRRF</label>
-        <input id="l-irrf" inputmode="decimal"></div>
+        <input id="l-irrf" inputmode="decimal" value="${v('irrf', '')}"></div>
       <div class="campo"><label for="l-destino">Instituição de destino</label>
-        <select id="l-destino"><option value="">—</option>${opcoes(cad.instituicoes)}</select></div>
+        <select id="l-destino"><option value="">—</option>
+          ${sel(cad.instituicoes, v('instituicao_destino_id'))}</select></div>
+      ${original ? `<div class="campo campo-largo"><label for="l-motivo">Motivo da
+        correção</label><input id="l-motivo"
+        placeholder="ex.: preço estava sem os custos da nota"></div>` : ''}
     </div>
-    <p class="trava-nota">Data em branco assume hoje. Em compra e venda o valor é
-      calculado de quantidade × preço quando deixado vazio.</p>`,
+    <p class="trava-nota">${original
+      ? 'O lançamento atual será <strong>estornado</strong> e um novo entra no lugar. '
+        + 'Os dois continuam visíveis no extrato: o razão não sobrescreve linha, '
+        + 'porque o que o imposto apurou ontem tem de continuar conferível.'
+      : 'Data em branco assume hoje. Em compra e venda o valor é calculado de '
+        + 'quantidade × preço quando deixado vazio.'}</p>`,
     async dlg => {
       const num = id => { const v = $(id, dlg).value.replace(',', '.').trim();
                           return v === '' ? null : Number(v); };
-      await tentar(() => api('lancar', {
+      const dados = {
         tipo: $('#l-tipo', dlg).value,
         data: $('#l-data', dlg).value || new Date().toLocaleDateString('pt-BR'),
         ativo: $('#l-ativo', dlg).value ? Number($('#l-ativo', dlg).value) : null,
@@ -596,9 +675,15 @@ function formLancamento(cad) {
         quantidade: num('#l-qtd') || 0, preco: num('#l-preco') || 0,
         valor: num('#l-valor'), custos: num('#l-custos') || 0,
         irrf: num('#l-irrf') || 0,
-      }), 'Lançamento gravado');
+      };
+      if (original) {
+        await tentar(() => api('corrigir', original.id, dados,
+          $('#l-motivo', dlg).value), 'Lançamento corrigido: o antigo foi estornado');
+      } else {
+        await tentar(() => api('lancar', dados), 'Lançamento gravado');
+      }
       irPara('lancamentos');
-    }, 'Lançar');
+    }, original ? 'Estornar e relançar' : 'Lançar');
 }
 
 function formEvento(cad) {
