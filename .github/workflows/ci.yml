@@ -84,6 +84,16 @@ jobs:
           if ($p.ExitCode -ne 0) {
             throw "o executável não passou na verificação (código $($p.ExitCode))"
           }
+          # O `EXE()` do PyInstaller lê os extras de **kwargs e IGNORA EM SILÊNCIO
+          # o nome que não conhece: `version_file=` em vez de `version=` gerou um
+          # binário com todos os campos vazios e nenhuma linha de aviso no log.
+          # Sem metadado o Explorer mostra "Publicador desconhecido" e nem o nome
+          # do programa — é o que sobra de reputação num binário sem assinatura.
+          $v = $exe.VersionInfo
+          Write-Host "recurso de versão: $($v.ProductName) $($v.ProductVersion)"
+          if (-not $v.ProductName -or -not $v.FileVersion) {
+            throw "o executável saiu sem recurso de versão do Windows"
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: Peculium-exe

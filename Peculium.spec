@@ -65,5 +65,10 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,           # é app de janela: console apareceria atrás dela
     icon="design/peculium.ico",
-    version_file="versao.txt",
+    # `version`, não `version_file`: o EXE lê os extras de **kwargs e ignora em
+    # SILÊNCIO o nome que não conhece. O `version_file=None` que estava aqui
+    # antes nunca foi lido por ninguém, e a primeira tentativa de arrumar isto
+    # gerou um binário com todos os campos vazios sem uma linha de aviso no log.
+    # O que denuncia é o "Copying version information to EXE" faltando.
+    version="versao.txt",
 )

@@ -87,7 +87,11 @@ Outros três métodos estavam na mesma situação, e ganharam tela:
 
 - **O executável ganhou recurso de versão do Windows** (nome, descrição,
   copyright). Binário sem assinatura e sem metadado não tem por onde ganhar
-  reputação — não substitui assinatura, só deixa de piorar.
+  reputação — não substitui assinatura, só deixa de piorar. O parâmetro é
+  `version=`, não `version_file=`: o `EXE()` do PyInstaller lê os extras de
+  `**kwargs` e **ignora em silêncio** o nome que não conhece, então a primeira
+  tentativa gerou um binário com todos os campos vazios e nenhuma linha de aviso.
+  O CI passou a conferir o recurso no binário pronto.
 - **`mock.js` não viaja mais dentro do executável.** É a ponte falsa dos testes
   de tela, e fonte de dado inventado não tem o que fazer no binário publicado.
 
