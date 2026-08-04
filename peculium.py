@@ -11,6 +11,7 @@ from __future__ import annotations
 import functools
 import json
 import sys
+import threading
 import traceback
 from datetime import date
 from pathlib import Path
@@ -32,7 +33,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.10.1"
+VERSAO = "0.11.0"
 
 
 def raiz() -> Path:
@@ -52,13 +53,29 @@ COFRE = PASTA / "peculium.pec"
 PREFERENCIAS = PASTA / "preferencias.json"
 
 
+# O pywebview roda CADA chamada do JavaScript numa thread nova
+# (`webview/util.py`: `Thread(target=_call).start()`), e a conexão do cofre é
+# aberta com `check_same_thread=False`. Sem esta trava, duas chamadas que se
+# sobrepõem dividem a mesma transação do SQLite — e o `commit()` de uma grava a
+# importação pela metade da outra. Caminho concreto: mandar gravar uma
+# importação grande e clicar "Atualizar cotações" enquanto ela roda.
+#
+# A trava fica no `_resposta` porque ele é o ponto único por onde toda chamada
+# da interface passa; pôr `with` em cada método seria uma linha para esquecer a
+# cada método novo. Reentrante porque método decorado chama método decorado.
+_TRAVA = threading.RLock()
+
+
 def _resposta(funcao):
     """Toda chamada devolve {ok, dados} ou {ok:false, erro}. Traceback fica no
-    console do processo, nunca na tela."""
+    console do processo, nunca na tela.
+
+    Serializa as chamadas: a ponte do pywebview é concorrente, o cofre não."""
     @functools.wraps(funcao)
     def envelope(self, *args, **kwargs):
         try:
-            return {"ok": True, "dados": funcao(self, *args, **kwargs)}
+            with _TRAVA:
+                return {"ok": True, "dados": funcao(self, *args, **kwargs)}
         except Exception as e:                       # noqa: BLE001 — fronteira
             traceback.print_exc()
             return {"ok": False, "erro": str(e), "tipo": type(e).__name__}
@@ -94,6 +111,11 @@ class Api:
         self._aberto: cofre.Cofre | None = None
         self._janela = None
         self._conferencias: dict[str, object] = {}
+        # Contador MONOTÔNICO, nunca `len(self._conferencias)`: com o tamanho do
+        # dicionário, confirmar a primeira de duas prévias fazia a terceira
+        # nascer com o token da segunda e SUBSTITUIR a prévia que ainda estava
+        # aberta — confirmar aquela tela gravava o arquivo errado.
+        self._proximo_token = 0
 
     # ------------------------------------------------------------------ cofre
 
@@ -255,7 +277,12 @@ class Api:
                                   if p.data[:4] == ano and p.valor})
         meses_de_aporte = self._conn.execute(
             "SELECT count(DISTINCT substr(data,1,7)) FROM lancamentos"
-            " WHERE tipo='COMPRA' AND estorna_id IS NULL").fetchone()[0]
+            " WHERE tipo='COMPRA' AND estorna_id IS NULL"
+            # sem esta linha o painel dizia "aportado em 1 mês" ao lado de
+            # aportes_ano zerado: os dois números saem da mesma tela e só um
+            # tinha o filtro do estorno
+            "   AND id NOT IN (SELECT estorna_id FROM lancamentos"
+            "                  WHERE estorna_id IS NOT NULL)").fetchone()[0]
 
         # séries dos dois gráficos do painel. Rótulo curto (MAI/26) porque no
         # eixo o mês por extenso não cabe em doze colunas
@@ -460,13 +487,31 @@ class Api:
             "tipos": list(lancamentos.TIPOS), "eventos": list(lancamentos.EVENTOS),
         }
 
+    # A classe muda a alíquota do imposto e o balde de compensação. Até aqui a
+    # única lista das sete vivia no JavaScript — e foi exatamente uma cópia
+    # incompleta dela que, na v0.9.3, fez todo CDB entrar como AÇÃO. Aquela
+    # correção tirou as cópias do JS; não pôs nada atrás delas. Isto põe.
+    CLASSES = ("ACAO", "FII", "ETF", "BDR", "UNIT", "RF", "TESOURO")
+
+    @classmethod
+    def _classe_ou_erro(cls, valor) -> str:
+        classe = str(valor or "").strip().upper()
+        if classe not in cls.CLASSES:
+            raise ValueError(f"classe inválida: {classe or '(vazia)'}. "
+                             f"Use uma de: {', '.join(cls.CLASSES)}")
+        return classe
+
     @_resposta
     @_exige_cofre
     def cadastrar_ativo(self, dados: dict) -> dict:
         ticker = str(dados.get("ticker", "")).strip().upper()
-        classe = str(dados.get("classe", "")).strip().upper()
-        if not ticker or not classe:
-            raise ValueError("ticker e classe são obrigatórios")
+        if not ticker:
+            raise ValueError("ticker é obrigatório")
+        classe = self._classe_ou_erro(dados.get("classe"))
+        if self._conn.execute("SELECT nome FROM ativos WHERE upper(ticker)=?",
+                              (ticker,)).fetchone():
+            # sem isto o usuário via "UNIQUE constraint failed: ativos.ticker"
+            raise ValueError(f"{ticker} já está cadastrado")
         identificador = self._conn.execute(
             "INSERT INTO ativos (ticker, nome, classe) VALUES (?,?,?)",
             (ticker, dados.get("nome") or None, classe)).lastrowid
@@ -499,9 +544,14 @@ class Api:
         if atual is None:
             raise ValueError(f"ativo {identificador} não existe")
         ticker = str(dados.get("ticker", atual["ticker"])).strip().upper()
-        classe = str(dados.get("classe", atual["classe"])).strip().upper()
-        if not ticker or not classe:
-            raise ValueError("ticker e classe são obrigatórios")
+        if not ticker:
+            raise ValueError("ticker é obrigatório")
+        classe = self._classe_ou_erro(dados.get("classe", atual["classe"]))
+        colide = self._conn.execute(
+            "SELECT ticker FROM ativos WHERE upper(ticker)=? AND id<>?",
+            (ticker, int(identificador))).fetchone()
+        if colide:
+            raise ValueError(f"{ticker} já está cadastrado em outro ativo")
         nome = dados.get("nome") if "nome" in dados else atual["nome"]
         ativo = int(bool(dados.get("ativo", atual["ativo"])))
         self._conn.execute(
@@ -571,12 +621,29 @@ class Api:
     def impostos(self, ano: int | None = None) -> dict:
         ano = int(ano or date.today().year)
         f = fisco.apurar(razao.apurar(self._conn))
+        # o prejuízo do ANO escolhido, não o de hoje: `f.prejuizo` é o saldo
+        # final de tudo, e abrir a tela de 2025 mostrando o acumulado de 2027
+        # dizia um número que nunca existiu naquele dezembro
+        do_ano = [b for b in f.baldes if b.competencia[:4] == str(ano)]
+        prejuizo = {b: 0.0 for b in fisco.ALIQUOTA}
+        # o último saldo de cada balde ATÉ o fim daquele ano — inclusive o que
+        # veio de anos anteriores, que atravessa sem prazo e não pode sumir só
+        # porque o balde não teve venda no ano escolhido
+        for balde in sorted((b for b in f.baldes if b.competencia[:4] <= str(ano)),
+                            key=lambda b: b.competencia):
+            prejuizo[balde.balde] = balde.prejuizo_acumulado
         return {
             "ano": ano,
-            "baldes": [vars(b) for b in f.baldes if b.competencia[:4] == str(ano)],
-            "prejuizo": f.prejuizo, "avisos": f.avisos,
+            "baldes": [vars(b) for b in do_ano],
+            "prejuizo": prejuizo, "avisos": f.avisos,
             "obrigacoes": [vars(o) | {"total_a_pagar": o.total_a_pagar}
                            for o in obrigacoes.listar(self._conn)],
+            # os pagamentos em si, para dar caminho de cancelar um lançado
+            # errado: `cancelar_pagamento` existia sem nenhuma chamada na tela,
+            # e um DARF digitado com o valor trocado ficava lá para sempre
+            "pagamentos": [dict(r) | {"data_br": textos.data_br(r["data"])}
+                           for r in self._conn.execute(
+                               "SELECT * FROM pagamentos ORDER BY data DESC, id DESC")],
             "anos": [r[0] for r in self._conn.execute(
                 "SELECT DISTINCT substr(data,1,4) FROM lancamentos ORDER BY 1 DESC")],
         }
@@ -603,6 +670,15 @@ class Api:
 
     # ------------------------------------------------------------------ importar
 
+    def _novo_token(self) -> str:
+        """Identificador da conferência pendente. **Monotônico.**
+
+        Com `len(self._conferencias)`, confirmar a primeira de duas prévias
+        fazia a terceira nascer com o token da segunda e substituir a prévia que
+        ainda estava aberta — confirmar aquela tela gravava o arquivo errado."""
+        self._proximo_token += 1
+        return f"imp{self._proximo_token}"
+
     @_resposta
     def escolher_arquivo(self, tipos: str = "") -> str | None:
         import webview
@@ -617,7 +693,7 @@ class Api:
     @_exige_cofre
     def importar(self, caminho: str) -> dict:
         alvo = Path(caminho)
-        token = f"imp{len(self._conferencias) + 1}"
+        token = self._novo_token()
         if alvo.suffix.lower() == ".pdf":
             config = self._config()
             texto = importar_nota.ler_texto(
@@ -694,6 +770,10 @@ class Api:
     @_exige_cofre
     def confirmar_importacao(self, token: str, tickers: dict | None = None,
                              classes: dict | None = None) -> dict:
+        if token not in self._conferencias:
+            raise ValueError("esta conferência não está mais aberta — ela já foi "
+                             "gravada, ou o cofre foi trancado depois da prévia. "
+                             "Escolha o arquivo de novo")
         origem, conferencia = self._conferencias.pop(token)
         if origem == "POSICAO":
             resumo = importar_posicao.gravar(self._conn, conferencia)

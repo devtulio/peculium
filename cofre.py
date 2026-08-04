@@ -39,6 +39,9 @@ BACKUPS = 3
 # atacante, que ataca offline sem passar por ela (DESIGN.md §3.2).
 PARAMS = {"n": 2 ** 17, "r": 8, "p": 1}
 _MARGEM_MAXMEM = 2  # OpenSSL recusa se maxmem <= memória exigida pelo scrypt
+# Teto do que o header pode pedir de memória. O padrão usa 128 MiB; 2 GiB deixa
+# margem para endurecer o KDF no futuro e ainda barra o pedido absurdo.
+TETO_MEMORIA = 2 * 1024 ** 3
 
 
 class CofreError(Exception):
@@ -60,7 +63,25 @@ class CofreEmUso(CofreError):
 # --------------------------------------------------------------------------- chaves
 
 def _derivar(senha: str, salt: bytes, params: dict) -> bytes:
+    """Deriva a KEK. Os parâmetros vêm do header, e o header **não é
+    autenticado** — daí o teto.
+
+    O corpo é cifrado com AAD nulo, então quem tem escrita no arquivo pode
+    reescrever o header. Não quebra o sigilo (a DEK está embrulhada e ele não a
+    tem) nem falsifica conteúdo (o GCM do corpo pega), mas `n = 2**30` faria o
+    scrypt tentar alocar cerca de um terabyte antes de descobrir que a senha nem
+    era daquele embrulho. O teto custa uma linha e fecha isso.
+
+    Autenticar o header inteiro seria melhor e não foi feito de propósito:
+    mudaria o formato do arquivo, e cofre que já existe tem de continuar
+    abrindo. O ganho — recusar adulteração que só causa recusa de serviço — não
+    paga o risco de uma migração no arquivo que guarda tudo."""
+    params = {c: int(params[c]) for c in ("n", "r", "p")}
     memoria = 128 * params["n"] * params["r"] * params["p"]
+    if not 0 < memoria <= TETO_MEMORIA:
+        raise ArquivoInvalido(
+            f"o cofre pede {memoria / 2**20:.0f} MiB para abrir a senha, acima do "
+            f"teto de {TETO_MEMORIA // 2**20} MiB — cabeçalho adulterado ou corrompido")
     return hashlib.scrypt(senha.encode("utf-8"), salt=salt, dklen=32,
                           maxmem=memoria * _MARGEM_MAXMEM, **params)
 
@@ -144,13 +165,29 @@ def _montar(header: dict, nonce: bytes, corpo: bytes) -> bytes:
 
 
 def _partir(dados: bytes) -> tuple[dict, bytes, bytes]:
+    """Arquivo truncado ou adulterado é `ArquivoInvalido`, nunca erro cru.
+
+    O módulo já traduzia com cuidado o erro do SQLite; aqui escapavam
+    `struct.error: unpack requires a buffer of 3 bytes` e `JSONDecodeError`, que
+    na tela não dizem nada a quem só quer saber que o arquivo não serve."""
     if not dados.startswith(MAGIC):
         raise ArquivoInvalido("não é um cofre do Peculium")
-    versao, tam = struct.unpack(">BH", dados[8:11])
+    try:
+        versao, tam = struct.unpack(">BH", dados[8:11])
+    except struct.error as e:
+        raise ArquivoInvalido("cofre truncado: falta o cabeçalho") from e
     if versao != VERSAO:
         raise ArquivoInvalido(f"cofre versão {versao}; este programa lê a {VERSAO}")
     ini = 11 + tam
-    return json.loads(dados[11:ini]), dados[ini:ini + NONCE], dados[ini + NONCE:]
+    if len(dados) < ini + NONCE:
+        raise ArquivoInvalido("cofre truncado: o arquivo acaba antes do conteúdo")
+    try:
+        header = json.loads(dados[11:ini])
+    except (ValueError, UnicodeDecodeError) as e:
+        raise ArquivoInvalido(f"cabeçalho do cofre ilegível: {e}") from e
+    if not isinstance(header, dict) or "kdf" not in header:
+        raise ArquivoInvalido("cabeçalho do cofre não tem os campos esperados")
+    return header, dados[ini:ini + NONCE], dados[ini + NONCE:]
 
 
 def _gravar_atomico(alvo: Path, dados: bytes) -> None:
@@ -159,7 +196,15 @@ def _gravar_atomico(alvo: Path, dados: bytes) -> None:
     A ordem importa: o corrente só é substituído depois que a cópia existe, então
     um crash no meio nunca deixa o usuário sem nenhum arquivo válido."""
     tmp = alvo.with_suffix(alvo.suffix + ".tmp")
-    tmp.write_bytes(dados)
+    # write_bytes sozinho entrega ao cache do SO: o `os.replace` pode ficar
+    # visível antes dos bytes chegarem ao disco, e uma queda de energia no meio
+    # deixaria o cofre corrente apontando para um arquivo de tamanho certo e
+    # conteúdo zerado. O rodízio de backups protege contra crash do processo;
+    # contra queda de energia, quem protege é o fsync.
+    with open(tmp, "wb") as arquivo:
+        arquivo.write(dados)
+        arquivo.flush()
+        os.fsync(arquivo.fileno())
     if alvo.exists():
         ultimo = alvo.with_suffix(f"{alvo.suffix}.{BACKUPS}")
         ultimo.unlink(missing_ok=True)
@@ -317,12 +362,20 @@ def _abrir(caminho: str | Path, kek_de: callable, embrulho: str) -> Cofre:
         # tela que tocasse a tabela nova.
         antes = esquema.versao_do_banco(conn)
         # Migração que falha **não** pode impedir a abertura: um cofre que não
-        # abre é muito pior que uma tela quebrada. `_migrar_2` confere antes de
-        # apagar, então uma falha aqui deixa o banco intacto.
+        # abre é muito pior que uma tela quebrada.
         try:
             esquema.aplicar(conn)
             aviso = ""
         except Exception as e:                          # noqa: BLE001
+            # O rollback não é zelo: `commit()` serializa o banco INTEIRO, então
+            # sem ele a primeira gravação normal do usuário — um lançamento
+            # qualquer, minutos depois — persistia o estado meio-migrado. Medido.
+            # (Não desfaz o que `executescript` já comitou por conta própria; o
+            # que ele alcança é a parte transacional, que é a que muda dado.)
+            try:
+                conn.rollback()
+            except sqlite3.Error:                       # noqa: BLE001
+                pass
             aviso = (f"o cofre não pôde ser atualizado para o formato desta "
                      f"versão ({e}). Ele abre, mas telas novas podem falhar.")
         cofre = Cofre(alvo, dek, header, conn, trava)

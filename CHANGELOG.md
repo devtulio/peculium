@@ -3,6 +3,94 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.11.0] — 2026-08-04
+
+Auditoria do sistema inteiro: 17 módulos lidos linha a linha, cada hipótese
+reproduzida rodando o código real. Saíram 25 achados, e este release fecha todos.
+Sobre o que já existia, 32 testes de unidade e 4 de tela novos — cada um
+verificado por mutação, neutralizando a correção para ver o teste morder.
+
+### Adicionado — o preço à mão, que o sistema mandava digitar e não tinha onde
+
+**Clicar em qualquer linha da Carteira abre o preço unitário.** `cotar_manual`
+existia na API sem uma única chamada na tela, enquanto três mensagens do
+programa mandavam fazer exatamente isso — inclusive o aviso do Tesouro IPCA+ que
+entrou na versão anterior. Aquele papel tinha dois caminhos e um era porta
+pintada na parede.
+
+Outros três métodos estavam na mesma situação, e ganharam tela:
+
+- **Eventos corporativos agora aparecem**, com botão de remover. Dava para
+  cadastrar um desdobramento e nunca mais vê-lo.
+- **Pagamento de DARF pode ser cancelado.** Um valor digitado errado ficava lá
+  para sempre.
+
+### Corrigido — graves
+
+- **"Apagar todos os dados" deixava o cofre sem integridade referencial.**
+  `PRAGMA foreign_keys` é no-op dentro de transação e os `DELETE` abrem uma, então
+  o religar do `finally` não religava nada: até reabrir o programa, lançamento
+  apontando para ativo inexistente entrava calado.
+- **Série do Banco Central com buraco no meio dava curva errada em silêncio.**
+  Cobertura se lê de `min`/`max`, e nenhum dos dois enxerga vão no meio; contar
+  linhas só é contar dias úteis se a série for contígua. Com um mês faltando,
+  eram 65 dias úteis onde havia 85 e o fator de um CDB saía um ponto percentual
+  abaixo da verdade. Agora o vão é detectado, o cálculo se recusa a inventar
+  número, e o download refaz a faixa inteira em vez de continuar do fim.
+- **Chamadas da interface podiam se atropelar.** O pywebview roda cada chamada
+  do JavaScript numa thread nova e a conexão do cofre é compartilhada: o
+  `commit()` de uma gravava a importação pela metade de outra. Passam por uma
+  trava só.
+
+### Corrigido — apuração e razão
+
+- **DARF pago parcialmente cobrava duas vezes os encargos já pagos.** Um de
+  R$ 3.750,00 com R$ 1.000,00 pagos mais R$ 33,00 de multa e R$ 12,00 de juros
+  dizia faltar R$ 2.795,00 quando faltavam R$ 2.750,00 de principal.
+- **IRRF excedente atravessava o ano-calendário.** Ele abate o imposto dos meses
+  seguintes **do mesmo ano** (IN RFB 1585, art. 63 §5); o que sobra em 31/12 vai
+  para o ajuste anual da declaração, não para janeiro. O prejuízo, esse sim,
+  atravessa anos sem prazo — e continua atravessando.
+- **Evento corporativo repetido era aplicado duas vezes.** Dois desdobramentos
+  1:2 idênticos faziam 100 ações virarem 400, e sem tela de listagem não havia
+  como descobrir.
+- **A tela de impostos mostrava o prejuízo de hoje em qualquer ano.** Abrir 2025
+  exibia o acumulado atual — um número que nunca existiu naquele dezembro.
+- **Corrigir um lançamento perdia o vínculo com a nota de corretagem.** O
+  negócio sumia da nota e o extrato passava a dizer "MANUAL" numa linha que veio
+  de documento. (O `hash_origem` continua ficando com o original de propósito.)
+- **O relatório de custos contava lançamento estornado**, e o painel contava o
+  mês cujo único aporte havia sido estornado — ao lado de um total do ano zerado,
+  na mesma tela.
+
+### Corrigido — arestas
+
+- **Classe de ativo entrava sem validação:** `CRIPTO` era aceito. A única lista
+  das sete vivia no JavaScript, e foi uma cópia incompleta dela que, na v0.9.3,
+  fez todo CDB entrar como ação. Aquela correção tirou as cópias; esta põe a
+  defesa atrás delas. Ticker repetido também deixou de responder em SQL.
+- **Prévia de importação pendente podia ser substituída** por outra e gravar o
+  arquivo errado: o token vinha do tamanho do dicionário, não de um contador.
+- **Arquivo de cofre truncado devolvia erro cru** (`struct.error`,
+  `JSONDecodeError`) em vez de dizer que o arquivo não serve. E o cabeçalho, que
+  não é autenticado, passou a ter teto de memória — `n = 2**30` faria o scrypt
+  tentar alocar cerca de um terabyte.
+- **Gravação do cofre agora faz `fsync`** antes de trocar o arquivo. O rodízio de
+  backups protegia contra queda do processo; contra queda de energia, quem
+  protege é o `fsync`.
+- **Atualizar cotações com ticker fora do cadastro** virava `KeyError` cru, e
+  valor vazio numa série do Banco Central derrubava o download inteiro.
+- **`vencido` na renda fixa** usava sempre a data de hoje: a posição de 31/12 do
+  ano passado marcava como vencido o papel que só venceu depois dela.
+
+### Empacotamento
+
+- **O executável ganhou recurso de versão do Windows** (nome, descrição,
+  copyright). Binário sem assinatura e sem metadado não tem por onde ganhar
+  reputação — não substitui assinatura, só deixa de piorar.
+- **`mock.js` não viaja mais dentro do executável.** É a ponte falsa dos testes
+  de tela, e fonte de dado inventado não tem o que fazer no binário publicado.
+
 ## [0.10.1] — 2026-08-04
 
 ### Mudado — cadastrar título de renda fixa ficou menos trabalhoso

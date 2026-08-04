@@ -96,11 +96,19 @@ class Obrigacao:
 
     @property
     def total_a_pagar(self) -> float:
-        """Só faz sentido no que ainda não foi quitado."""
+        """Só faz sentido no que ainda não foi quitado.
+
+        Em PARCIAL, `multa` e `juros` são **os que o usuário já pagou**, e não
+        encargos sobre o que falta: somá-los aqui cobrava duas vezes o que já
+        saiu do bolso dele. Um DARF de R$ 3.750,00 com R$ 1.000,00 pagos mais
+        R$ 33,00 de multa e R$ 12,00 de juros dizia faltar R$ 2.795,00 quando
+        faltavam R$ 2.750,00 de principal."""
         if self.situacao in (PAGO, A_MAIOR, ACUMULANDO):
             return 0.0
-        return round(max(0.0, self.valor_apurado - self.valor_pago)
-                     + self.multa + (self.juros or 0.0), 2)
+        falta = round(max(0.0, self.valor_apurado - self.valor_pago), 2)
+        if self.situacao == PARCIAL:
+            return falta
+        return round(falta + self.multa + (self.juros or 0.0), 2)
 
 
 def encargos(valor: float, vencimento: str, pagamento: str,
@@ -181,8 +189,10 @@ def listar(conn, hoje: str | None = None) -> list[Obrigacao]:
             elif diferenca < 0:
                 o.situacao = PARCIAL
                 o.observacoes.append(
-                    f"faltam R$ {-diferenca:.2f} — ou o pagamento foi a menor, ou a "
-                    f"apuração subiu depois de pago (lançamento retroativo)")
+                    f"faltam R$ {-diferenca:.2f} de principal — ou o pagamento foi "
+                    f"a menor, ou a apuração subiu depois de pago (lançamento "
+                    f"retroativo). Multa e juros sobre o que falta não estão "
+                    f"calculados: os valores ao lado são os que você já pagou")
             else:
                 o.situacao = A_MAIOR
                 o.observacoes.append(

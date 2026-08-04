@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.10.1</title>
+<title>Manual Operacional — Peculium v0.11.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.10.1 — Manual Operacional";
+    @top-center { content: "Peculium v0.11.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.10.1</div>
+  <div class="versao">VERSÃO 0.11.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.10.1.exe" --verificar</pre>
+<pre>"Peculium v0.11.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -229,6 +229,21 @@ grupamento de 10:1 é <code>0,1</code>.</p>
 total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
 para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
 
+<h3>Digitar o preço à mão</h3>
+
+<p><strong>Clique em qualquer linha da Carteira</strong> — inclusive nas do bloco
+de renda fixa — para informar o preço unitário do papel numa data.</p>
+
+<p>O preço digitado <strong>vence</strong> o calculado e o baixado: recalcular
+curvas ou atualizar cotações não o apaga. Serve para dois casos:</p>
+
+<ul>
+  <li><strong>Tesouro IPCA+</strong>, que não tem curva reconstruível — ela
+    depende do VNA oficial, que a série mensal do IPCA não devolve.</li>
+  <li>Qualquer papel <strong>sem cotação</strong>. Sem preço, a carteira o avalia
+    pelo preço médio, que é o que ele custou e não o que vale.</li>
+</ul>
+
 <h3>“Título não cadastrado”: como resolver</h3>
 
 <p>Um papel de renda fixa aparece na carteira sem indexador nem taxa quando ele
@@ -253,6 +268,20 @@ branco</strong> na maioria dos CDBs, e a <strong>taxa nunca vem</strong>.</p>
   IPCA. O preço vem de <strong>importar a Posição da B3</strong>, ou de digitar o
   preço unitário à mão — e preço digitado sempre vence o calculado.
 </div>
+
+<h3>Eventos corporativos</h3>
+
+<p>Desdobramento, grupamento, conversão e incorporação ficam listados no fim da
+tela de <em>Lançamentos</em>, com botão de remover.</p>
+
+<p>O <strong>fator</strong> é sempre o multiplicador da <strong>quantidade</strong>:
+desdobramento de 1:10 é <code>10</code>, grupamento de 10:1 é <code>0,1</code>.
+O custo total não muda — o preço médio se ajusta sozinho, que é o efeito correto.</p>
+
+<p>Evento não tem estorno: ele não é fato seu, é fato da companhia, e quem errou
+o fator corrige o cadastro. A remoção fica na auditoria. O mesmo evento não pode
+ser cadastrado duas vezes para o mesmo papel na mesma data — repetir dobraria a
+quantidade de novo.</p>
 
 <h3>Editar um lançamento</h3>
 

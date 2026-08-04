@@ -457,6 +457,7 @@ async function verCarteira() {
     ['Ativo', 'Classe', 'Quantidade', 'Preço médio', 'Custo', 'Cotação',
      'Valor de mercado', 'Resultado', '% carteira'],
     linhas.map(p => ({
+      editar: `preco:${p.ativo_id}`,
       celulas: [
         esc(p.ticker), esc(p.classe), qtd(p.quantidade), brl(p.preco_medio),
         brl(p.custo),
@@ -469,6 +470,52 @@ async function verCarteira() {
     { numericas: [2, 3, 4, 5, 6, 7, 8], vazio: 'Carteira vazia — importe ou lance uma compra' });
 
   if (rf.posicao.length) $('#view').insertAdjacentHTML('beforeend', blocoRendaFixa(rf));
+
+  // Clicar na linha digita o preço. O sistema mandava fazer isso em três
+  // lugares — a mensagem de série indisponível, o cabeçalho do módulo de renda
+  // fixa e o aviso do IPCA+ — e o botão não existia em nenhum: `cotar_manual`
+  // era um método de API sem uma única chamada na tela.
+  $$('#view tr[data-editar]').forEach(tr => {
+    const abrir = () => formPreco(Number(tr.dataset.editar.split(':')[1]),
+                                  [...linhas, ...rf.posicao]);
+    tr.addEventListener('click', abrir);
+    tr.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+    });
+  });
+}
+
+/* Preço digitado à mão. Ele VENCE o calculado e o baixado (regra do `cotacoes`),
+   e é o único caminho para o Tesouro IPCA+, cuja curva depende do VNA oficial e
+   não se reconstrói da série mensal do IPCA. */
+function formPreco(ativoId, posicoes) {
+  const p = posicoes.find(x => x.ativo_id === ativoId);
+  if (!p) return;
+  const atual = p.cotacao ?? p.pu;
+  const hoje = new Date();
+  const dataHoje = [hoje.getDate(), hoje.getMonth() + 1, hoje.getFullYear()]
+    .map((n, i) => i < 2 ? String(n).padStart(2, '0') : n).join('/');
+  modal(`Preço de ${p.ticker}`, `
+    <div class="form-grade">
+      <div class="campo"><label for="pm-data">Data</label>
+        <input id="pm-data" value="${esc(dataHoje)}" placeholder="dd/mm/aaaa"></div>
+      <div class="campo"><label for="pm-valor">Preço unitário</label>
+        <input id="pm-valor" inputmode="decimal"
+          value="${atual == null ? '' : String(atual).replace('.', ',')}"></div>
+    </div>
+    <p class="trava-nota">O preço digitado <strong>vence</strong> o calculado e o
+      baixado: recalcular curvas ou atualizar cotações não o apaga.</p>
+    <p class="trava-nota">É o caminho do <strong>Tesouro IPCA+</strong>, que não
+      tem curva reconstruível — ela depende do VNA oficial, que a série mensal do
+      IPCA não devolve. Vale também para qualquer papel sem cotação: sem preço, a
+      carteira o avalia pelo preço médio, que é o que ele custou e não o que vale.</p>`,
+    async dlg => {
+      const valor = $('#pm-valor', dlg).value.replace(/\./g, '').replace(',', '.');
+      if (!valor.trim()) return toast('Informe o preço', true);
+      await tentar(() => api('cotar_manual', ativoId, $('#pm-data', dlg).value,
+                             Number(valor)), 'Preço registrado');
+      irPara('carteira');
+    }, 'Registrar preço');
 }
 
 function blocoRendaFixa(rf) {
@@ -478,6 +525,7 @@ function blocoRendaFixa(rf) {
               'Custo', 'PU', 'Bruto', 'Rendimento'],
       rf.posicao.map(p => ({
         classe: p.vencido ? 'estornado' : '',
+        editar: `preco:${p.ativo_id}`,
         celulas: [esc(p.ticker), esc(p.emissor || '—'), esc(p.indexador),
                   esc(p.vencimento ? p.vencimento.split('-').reverse().join('/') : '—'),
                   qtd(p.quantidade), brl(p.custo),
@@ -486,6 +534,8 @@ function blocoRendaFixa(rf) {
       })), { numericas: [4, 5, 6, 7, 8] })}
     <ul class="aviso-lista">
       ${semCurva.map(p => `<li>${esc(p.ticker)}: ${esc(p.erro)}</li>`).join('')}
+      <li>Clique em qualquer linha para <strong>digitar o preço à mão</strong>. É
+          o caminho do Tesouro IPCA+, e o preço digitado vence o calculado.</li>
       <li>O rendimento é bruto. O IR de renda fixa é retido na fonte pela tabela
           regressiva — veja a estimativa no relatório de Renda fixa.</li>
     </ul></div>`;
@@ -570,7 +620,8 @@ function textoData(iso) {
 /* ── lançamentos ───────────────────────────────────────────────────────── */
 
 async function verLancamentos() {
-  const [linhas, cad] = await Promise.all([api('listar_lancamentos'), cadastros()]);
+  const [linhas, eventos, cad] = await Promise.all([
+    api('listar_lancamentos'), api('listar_eventos'), cadastros()]);
   $('#acoes-view').append(
     botao('Novo lançamento', () => formLancamento(cad), 'primario'),
     botao('Evento corporativo', () => formEvento(cad)));
@@ -591,8 +642,44 @@ async function verLancamentos() {
     })),
     { numericas: [4, 5, 6, 7], vazio: 'Nenhum lançamento ainda' });
 
+  if (eventos.length)
+    $('#view').insertAdjacentHTML('beforeend', blocoEventos(eventos));
+
   $$('[data-detalhes]').forEach(b => b.addEventListener('click', () =>
     formDetalhes(linhas.find(l => l.id === Number(b.dataset.detalhes)), cad)));
+  $$('[data-remover-evento]').forEach(b => b.addEventListener('click', () => {
+    const id = Number(b.dataset.removerEvento);
+    const ev = eventos.find(e => e.id === id);
+    modal('Remover evento corporativo',
+      `<p>Remover o <strong>${esc(ev.tipo)}</strong> de ${esc(ev.ticker)} em
+        ${esc(ev.data_br)}, fator ${esc(String(ev.fator))}?</p>
+       <p class="trava-nota">Evento não tem estorno: ele não é fato seu, é fato da
+         companhia, e quem errou o fator corrige o cadastro. A remoção fica na
+         auditoria, e a posição é recalculada na hora.</p>`,
+      async () => {
+        await tentar(() => api('remover_evento', id), 'Evento removido');
+        irPara('lancamentos');
+      }, 'Remover');
+  }));
+}
+
+/* Eventos corporativos existiam sem tela: dava para cadastrar um desdobramento
+   e nunca mais vê-lo. `listar_eventos` e `remover_evento` estavam na API sem
+   nenhuma chamada — e o dobro do fator, que o razão aplicava calado, não tinha
+   como ser descoberto. */
+function blocoEventos(eventos) {
+  return `<div class="bloco" style="margin-top:1.4rem"><h3>Eventos corporativos</h3>
+    ${tabela(['Data ex', 'Tipo', 'Ativo', 'Fator', 'Destino', 'Observação', ''],
+      eventos.map(e => ({
+        celulas: [
+          esc(e.data_br), esc(e.tipo), esc(e.ticker),
+          esc(String(e.fator)), esc(e.ticker_destino || '—'), esc(e.obs || '—'),
+          `<button type="button" class="link" data-remover-evento="${e.id}"
+            >remover</button>`],
+      })), { numericas: [3] })}
+    <p class="trava-nota">O fator é sempre o multiplicador da <strong>quantidade</strong>:
+      desdobramento de 1:10 é 10, grupamento de 10:1 é 0,1. O custo total não muda —
+      o preço médio se ajusta sozinho.</p></div>`;
 }
 
 /* Duas operações, e a diferença entre elas É a regra do razão.
@@ -1018,9 +1105,14 @@ async function verImpostos() {
             : brl(o.juros),
           brl(o.total_a_pagar),
           o.total_a_pagar > 0
+            // o principal vai explícito: em PARCIAL o total a pagar é só o que
+            // falta de principal (multa e juros ali são os que JÁ foram pagos),
+            // e subtraí-los do total daria um campo negativo
             ? `<button type="button" class="link" data-pagar="${esc(o.competencia)}"
-                 data-valor="${o.total_a_pagar}" data-multa="${o.multa || 0}"
-                 data-juros="${o.juros || 0}">registrar pagamento</button>`
+                 data-principal="${Math.max(0, o.valor_apurado - o.valor_pago).toFixed(2)}"
+                 data-multa="${o.situacao === 'PARCIAL' ? 0 : (o.multa || 0)}"
+                 data-juros="${o.situacao === 'PARCIAL' ? 0 : (o.juros || 0)}"
+                 >registrar pagamento</button>`
             : '']),
         { numericas: [2, 3, 5, 6, 7, 8], vazio: 'Nenhum DARF apurado' })}
       <ul class="aviso-lista">${d.obrigacoes.flatMap(o => o.observacoes || [])
@@ -1040,14 +1132,42 @@ async function verImpostos() {
         <li>Memória de cálculo para conferência: o Peculium não transmite nada à
             Receita nem emite DARF oficial.</li>
       </ul>
-    </div>`;
+    </div>
+    ${(d.pagamentos || []).length ? `
+    <div class="bloco" style="margin-top:1rem"><h3>Pagamentos registrados</h3>
+      ${tabela(['Data', 'Competência', 'Código', 'Principal', 'Multa', 'Juros',
+                'Observação', ''],
+        d.pagamentos.map(p => [
+          esc(p.data_br), esc(p.competencia), esc(p.codigo), brl(p.valor),
+          brl(p.multa), brl(p.juros), esc(p.obs || '—'),
+          `<button type="button" class="link" data-cancelar-pag="${p.id}"
+            >cancelar</button>`]),
+        { numericas: [3, 4, 5] })}
+      <p class="trava-nota">Só o <strong>pagamento</strong> é fato e fica gravado;
+        o valor devido é recalculado do razão a cada consulta. Cancelar aqui apaga
+        o registro do pagamento — use quando ele foi digitado errado, não para
+        "zerar" um DARF que a apuração ainda cobra.</p>
+    </div>` : ''}`;
+
+  $$('[data-cancelar-pag]').forEach(b => b.addEventListener('click', () => {
+    const id = Number(b.dataset.cancelarPag);
+    const p = d.pagamentos.find(x => x.id === id);
+    modal('Cancelar pagamento',
+      `<p>Apagar o pagamento de <strong>R$ ${brl(p.valor)}</strong> da competência
+        ${esc(p.competencia)}, registrado em ${esc(p.data_br)}?</p>
+       <p class="trava-nota">O DARF volta a aparecer como pendente ou vencido, com
+         multa e juros recalculados até hoje.</p>`,
+      async () => {
+        await tentar(() => api('cancelar_pagamento', id), 'Pagamento cancelado');
+        irPara('impostos');
+      }, 'Cancelar pagamento');
+  }));
 
   $$('[data-pagar]').forEach(b => b.addEventListener('click', () =>
     modal(`Pagamento do DARF ${b.dataset.pagar}`, `
       <div class="form-grade">
         <div class="campo"><label for="p-valor">Principal</label>
-          <input id="p-valor" value="${(Number(b.dataset.valor) - Number(b.dataset.multa)
-                                        - Number(b.dataset.juros)).toFixed(2)}"></div>
+          <input id="p-valor" value="${esc(b.dataset.principal)}"></div>
         <div class="campo"><label for="p-multa">Multa</label>
           <input id="p-multa" value="${Number(b.dataset.multa).toFixed(2)}"></div>
         <div class="campo"><label for="p-juros">Juros</label>

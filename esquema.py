@@ -26,6 +26,13 @@ CREATE TABLE IF NOT EXISTS instituicoes (
 CREATE UNIQUE INDEX IF NOT EXISTS ix_inst_chave ON instituicoes(chave)
     WHERE chave IS NOT NULL;
 
+-- Sem CHECK em `classe`, e é decisão, não esquecimento. A defesa contra classe
+-- inválida está em `Api._classe_ou_erro`, que cobre os dois caminhos de escrita
+-- que existem. Pôr o CHECK aqui só valeria para cofre NOVO — `CREATE TABLE IF
+-- NOT EXISTS` não altera tabela existente —, e teria de vir com um rebuild da
+-- tabela para alcançar os antigos. Dois esquemas diferentes em circulação são
+-- piores que nenhum dos dois, e o rebuild estouraria justamente no cofre que
+-- carrega uma classe errada da v0.9.3, que é quem mais precisa abrir.
 CREATE TABLE IF NOT EXISTS ativos (
     id       INTEGER PRIMARY KEY,
     ticker   TEXT NOT NULL UNIQUE,
@@ -298,7 +305,11 @@ def limpar(conn: sqlite3.Connection,
         "SELECT name FROM sqlite_master WHERE type='table'"
         " AND name NOT LIKE 'sqlite_%' ORDER BY name")]
     apagados: dict[str, int] = {}
-    # sem isto a ordem do apagamento importaria, e ela viria da mesma lista à mão
+    # sem isto a ordem do apagamento importaria, e ela viria da mesma lista à mão.
+    # `PRAGMA foreign_keys` é **no-op dentro de transação** — por isso o commit
+    # ANTES de desligar: sem ele, um DELETE pendente de outra operação faria o
+    # pragma ser ignorado em silêncio e a ordem voltaria a importar.
+    conn.commit()
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         for tabela in tabelas:
@@ -308,11 +319,14 @@ def limpar(conn: sqlite3.Connection,
             conn.execute(f"DELETE FROM {tabela}")
             if linhas:
                 apagados[tabela] = linhas
+        # DELETE só marca a página como livre: os bytes apagados continuariam
+        # dentro do banco, e o banco inteiro vai cifrado para o arquivo. Sem o
+        # VACUUM, quem tem a senha ainda leria o que o usuário mandou apagar.
+        conn.commit()                        # VACUUM não roda dentro de transação
+        conn.execute("VACUUM")
     finally:
+        # e aqui pela mesma razão: religar antes do commit era um pragma
+        # engolido pela transação dos DELETE, e o cofre seguia SEM integridade
+        # referencial até o programa ser reaberto — em silêncio.
         conn.execute("PRAGMA foreign_keys=ON")
-    # DELETE só marca a página como livre: os bytes apagados continuariam dentro
-    # do banco, e o banco inteiro vai cifrado para o arquivo. Sem o VACUUM, quem
-    # tem a senha ainda leria o que o usuário mandou apagar.
-    conn.commit()                            # VACUUM não roda dentro de transação
-    conn.execute("VACUUM")
     return apagados

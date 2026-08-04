@@ -44,9 +44,16 @@ class Titulo:
     emissor: str | None
     isento: bool
 
+    def venceu_ate(self, data: str | None = None) -> bool:
+        """Já venceu na data consultada — que nem sempre é hoje: a posição de
+        31/12 do ano passado não pode marcar como vencido o papel que venceu
+        depois dela."""
+        return bool(self.vencimento) and self.vencimento < (
+            data or date.today().isoformat())
+
     @property
     def vencido(self) -> bool:
-        return bool(self.vencimento) and self.vencimento < date.today().isoformat()
+        return self.venceu_ate()
 
     def descricao(self) -> str:
         if self.indexador == "CDI":
@@ -202,8 +209,8 @@ def sugestao(conn, ativo_id: int) -> dict:
     que mais dói errar, porque o PU errado erra a posição em ordem de grandeza.
     Sobra o usuário informar indexador e taxa, que nenhum arquivo da B3 traz.
 
-    Também devolve o vencimento e o emissor quando a importação da posição os
-    deixou no cadastro do ativo."""
+    Devolve também o **emissor**, quando o nome que a Movimentação da B3 gravou
+    no ativo o carrega ("CDB - CDB726AM6KA - BANCO INTER S/A")."""
     linha = conn.execute(
         "SELECT data, preco FROM lancamentos WHERE ativo_id=? AND tipo='COMPRA'"
         "  AND preco > 0 AND estorna_id IS NULL"
@@ -260,7 +267,7 @@ def posicao(conn, data: str | None = None) -> list[dict]:
             "indexador": t.descricao() if t else "—",
             "emissao": t.emissao if t else None,
             "vencimento": t.vencimento if t else None,
-            "vencido": t.vencido if t else False,
+            "vencido": t.venceu_ate(data) if t else False,
             "quantidade": p.quantidade, "custo": p.custo_total,
             "pu": unitario, "bruto": bruto, "rendimento": bruto - p.custo_total,
             "isento": t.isento if t else False, "erro": erro,

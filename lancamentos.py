@@ -270,11 +270,17 @@ def corrigir(conn, lancamento_id: int, *, motivo: str = "", **campos) -> dict:
         "irrf": campos.get("irrf", original["irrf"]),
         "obs": campos.get("obs", original["obs"]) or "",
     }
-    estorno = estornar(conn, lancamento_id,
-                       motivo or f"corrigido pelo lançamento seguinte")
+    estorno = estornar(conn, lancamento_id, motivo or "corrigido pelo lançamento seguinte")
     identificador = lancar(conn, **novo)
-    conn.execute("UPDATE lancamentos SET origem=? WHERE id=?",
-                 (f"CORRIGE_{lancamento_id}", identificador))
+    # A nota e a importação viajam junto. Diferente do `hash_origem`, que fica
+    # de propósito com o original (é ele que faz reimportar o mesmo arquivo
+    # reconhecer a linha), o vínculo com a NOTA é do negócio, não do registro:
+    # sem ele, corrigir o preço fazia o negócio sumir da nota e o extrato passar
+    # a dizer "MANUAL" num lançamento que veio de documento.
+    conn.execute("UPDATE lancamentos SET origem=?, nota_id=?, importacao_id=?"
+                 " WHERE id=?",
+                 (f"CORRIGE_{lancamento_id}", original["nota_id"],
+                  original["importacao_id"], identificador))
     auditar(conn, "CORRIGIR",
             f"#{lancamento_id} -> #{identificador}"
             f"{f': {motivo}' if motivo else ''}")
@@ -313,6 +319,18 @@ def registrar_evento(conn, *, ativo, data_ex, tipo: str, fator: float,
         destino_id = _ativo_id(conn, destino)
         if destino_id == ativo_id:
             raise DadoInvalido(f"{tipo} precisa de um ativo de destino diferente")
+
+    # Evento não tem estorno e o razão aplica todos: cadastrar o mesmo
+    # desdobramento duas vezes dobrava a quantidade de novo — 100 ações viravam
+    # 400 num 1:2 repetido. Diferente do lançamento, aqui repetir nunca é caso
+    # legítimo: a companhia não desdobra duas vezes no mesmo dia pelo mesmo fator.
+    ja = conn.execute(
+        "SELECT id FROM eventos WHERE ativo_id=? AND data_ex=? AND tipo=?",
+        (ativo_id, iso, tipo)).fetchone()
+    if ja:
+        raise DadoInvalido(
+            f"{tipo} de {textos.data_br(iso)} já está cadastrado (evento "
+            f"#{ja[0]}). Para trocar o fator, remova o antigo primeiro")
 
     identificador = conn.execute(
         "INSERT INTO eventos (ativo_id, data_ex, tipo, fator, ativo_destino_id, obs)"

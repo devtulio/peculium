@@ -106,6 +106,11 @@ def cotar(conn, data: str, tickers: list[str] | None = None,
         if not TICKER.match(alvo):
             resultado.falhas[alvo] = "formato de ticker não reconhecido"
             continue
+        if alvo not in ids:
+            # ficava FORA do `try` e escapava como KeyError cru, contra a
+            # promessa da docstring. Só alcançável com `tickers` explícito
+            resultado.falhas[alvo] = "ativo não cadastrado"
+            continue
         try:
             valor = buscador(alvo)
         except (urllib.error.URLError, OSError, KeyError, IndexError,

@@ -6,15 +6,45 @@
 A `ui/` viaja dentro do pacote e é encontrada por `peculium.raiz()`, que lê
 `sys._MEIPASS` quando congelado.
 """
+from glob import glob
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-VERSAO = "0.10.1"
+VERSAO = "0.11.0"
+
+# Recurso de versão do Windows. Binário sem assinatura E sem metadado não tem
+# nada por onde ganhar reputação: o Explorer mostra "Publicador desconhecido" e
+# nem o nome do programa. É o passo mais barato contra o Smart App Control, e
+# não substitui assinatura — só deixa de piorar.
+_v = tuple(int(p) for p in VERSAO.split(".")) + (0,)
+Path("versao.txt").write_text(f"""\
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers={_v}, prodvers={_v}, mask=0x3f, flags=0x0,
+                    OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('040904B0', [
+        StringStruct('CompanyName', 'Peculium'),
+        StringStruct('FileDescription', 'Peculium — gerenciador de investimentos'),
+        StringStruct('FileVersion', '{VERSAO}'),
+        StringStruct('InternalName', 'Peculium'),
+        StringStruct('LegalCopyright', 'Licenca MIT'),
+        StringStruct('OriginalFilename', 'Peculium.exe'),
+        StringStruct('ProductName', 'Peculium'),
+        StringStruct('ProductVersion', '{VERSAO}')])]),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)
+""", encoding="utf-8")
 
 a = Analysis(
     ["peculium.py"],
     pathex=[],
     binaries=[],
-    datas=[("ui", "ui")] + collect_data_files("webview"),
+    # `mock.js` fica de fora: é a ponte falsa dos testes de tela, e uma fonte de
+    # dado inventado não tem o que fazer dentro do binário publicado.
+    datas=[(p, "ui") for p in glob("ui/*") if not p.endswith("mock.js")] \
+          + collect_data_files("webview"),
     # o pywebview escolhe o backend em tempo de execução, por import dinâmico:
     # sem declarar, o PyInstaller não enxerga nenhum deles e a janela não abre
     hiddenimports=collect_submodules("webview.platforms") + ["clr_loader"],
@@ -35,5 +65,5 @@ exe = EXE(
     runtime_tmpdir=None,
     console=False,           # é app de janela: console apareceria atrás dela
     icon="design/peculium.ico",
-    version_file=None,
+    version_file="versao.txt",
 )

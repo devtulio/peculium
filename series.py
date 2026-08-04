@@ -29,6 +29,10 @@ import textos
 
 HOST = "api.bcb.gov.br"
 TIMEOUT = 20
+# Vão máximo tolerado entre dois registros de uma série diária. O carnaval
+# emenda com o fim de semana e chega a cinco dias sem pregão; acima disso não é
+# feriado, é pedaço faltando.
+MAIOR_VAO = 10
 
 # nome interno -> código da série no SGS
 SERIES = {"CDI": 12, "SELIC": 11, "IPCA": 433, "SELIC_MENSAL": 4390}
@@ -87,15 +91,26 @@ def baixar(conn, indices: list[str] | None = None, inicio: str | None = None,
         desde = inicio
         if ja and (not inicio or ja[0] <= inicio):
             desde = ja[1]              # continua de onde parou
+            # ...a não ser que o meio esteja furado. Continuar do fim nunca
+            # tapa um buraco anterior, e buraco não denuncia: `min`/`max`
+            # relatam a mesma cobertura de uma série inteira.
+            if indice in DIARIAS and buraco(conn, indice, ja[0], ja[1]):
+                desde = inicio or ja[0]
         try:
             linhas = buscador(SERIES[indice], desde, fim)
         except (urllib.error.URLError, OSError, ValueError, TypeError) as e:
             resultado.falhas[indice] = f"{type(e).__name__}: {e}"
             continue
         for linha in linhas:
+            # o SGS devolve valor vazio em algumas datas; fora do `try`, isso
+            # derrubava o download inteiro em vez de virar uma falha da série
+            try:
+                valor = float(linha["valor"])
+            except (KeyError, TypeError, ValueError):
+                continue
             conn.execute(
                 "INSERT OR REPLACE INTO series (indice, data, valor) VALUES (?,?,?)",
-                (indice, textos.data_iso(linha["data"]), float(linha["valor"])))
+                (indice, textos.data_iso(linha["data"]), valor))
             resultado.gravados += 1
         resultado.cobertura[indice] = cobertura(conn, indice)
     return resultado
@@ -106,6 +121,29 @@ def dias_uteis(conn, inicio: str, fim: str, indice: str = "CDI") -> int:
     return conn.execute(
         "SELECT count(*) FROM series WHERE indice=? AND data>? AND data<=?",
         (indice, inicio, fim)).fetchone()[0]
+
+
+def buraco(conn, indice: str, inicio: str, fim: str) -> tuple[str, str] | None:
+    """Maior intervalo sem registro dentro da faixa, quando ele é grande demais
+    para ser feriado ou fim de semana.
+
+    **Contar linhas só é contar dias úteis se a série for contígua.** Cobertura
+    se lê de `min`/`max`, e esses dois não enxergam buraco no meio: uma série
+    com fevereiro inteiro faltando relata a mesma cobertura de uma completa, e
+    aí `fator_cdi` rende menos que a verdade sem nada avisar. Medido: 65 dias
+    úteis onde havia 85, e o fator de um CDB caindo um ponto percentual.
+
+    O limiar é generoso de propósito — o carnaval emenda com o fim de semana e
+    chega a cinco dias sem pregão. Só interessa o buraco que denuncia download
+    em duas janelas, e esse é de semanas."""
+    datas = [r[0] for r in conn.execute(
+        "SELECT data FROM series WHERE indice=? AND data>=? AND data<=?"
+        " ORDER BY data", (indice, inicio, fim))]
+    for anterior, seguinte in zip(datas, datas[1:]):
+        vao = (date.fromisoformat(seguinte) - date.fromisoformat(anterior)).days
+        if vao > MAIOR_VAO:
+            return anterior, seguinte
+    return None
 
 
 def _exige_cobertura(conn, indice: str, inicio: str, fim: str) -> None:
@@ -121,6 +159,12 @@ def _exige_cobertura(conn, indice: str, inicio: str, fim: str) -> None:
         raise SerieIndisponivel(
             f"série {indice} começa em {textos.data_br(faixa[0])}, depois de "
             f"{textos.data_br(inicio)}")
+    vazio = buraco(conn, indice, inicio, fim)
+    if vazio:
+        raise SerieIndisponivel(
+            f"série {indice} tem um vão de {textos.data_br(vazio[0])} a "
+            f"{textos.data_br(vazio[1])} — com dia faltando o fator sai MENOR "
+            f"que a verdade, e em silêncio. Atualize as séries")
 
 
 def fator_cdi(conn, inicio: str, fim: str, percentual: float = 100.0) -> float:

@@ -104,6 +104,56 @@ test.describe('alta e baixa', () => {
   });
 });
 
+test.describe('achados da auditoria', () => {
+  test('clicar na linha da carteira abre o preço à mão', async ({ page }) => {
+    // `cotar_manual` era um método de API sem UMA chamada na tela, enquanto três
+    // mensagens do sistema mandavam o usuário digitar o preço à mão
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await page.click('#view tbody tr:first-child');
+    await expect(page.locator('#modal-titulo')).toContainText('Preço de KLBN4');
+    await expect(page.locator('#pm-valor')).toHaveValue('3,72');
+    await expect(page.locator('#modal-corpo')).toContainText('Tesouro IPCA+');
+
+    await page.fill('#pm-valor', '4,10');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Preço registrado');
+  });
+
+  test('a renda fixa também abre o preço à mão', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="carteira"]');
+    await expect(page.locator('.aviso-lista')).toContainText('digitar o preço à mão');
+    // a tabela principal é filha direta de #view; a de renda fixa vive num .bloco
+    await page.click('#view .bloco table tbody tr:first-child');
+    await expect(page.locator('#modal-titulo')).toContainText('Preço de CDB5267UW6V');
+  });
+
+  test('eventos corporativos ganharam tela, e dá para remover', async ({ page }) => {
+    // dava para cadastrar um desdobramento e nunca mais vê-lo — e o razão
+    // aplicava o duplicado calado, dobrando a quantidade
+    await destrancar(page);
+    await page.click('#menu button[data-view="lancamentos"]');
+    await expect(page.locator('#view')).toContainText('Eventos corporativos');
+    await expect(page.locator('#view')).toContainText('DESDOBRAMENTO');
+
+    await page.click('[data-remover-evento]');
+    await expect(page.locator('#modal-corpo')).toContainText('Evento não tem estorno');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Evento removido');
+  });
+
+  test('pagamento de DARF pode ser cancelado', async ({ page }) => {
+    await destrancar(page);
+    await page.click('#menu button[data-view="impostos"]');
+    await expect(page.locator('#view')).toContainText('Pagamentos registrados');
+    await page.click('[data-cancelar-pag]');
+    await expect(page.locator('#modal-corpo')).toContainText('R$ 212,40');
+    await page.click('#modal-ok');
+    await expect(page.locator('#toast')).toContainText('Pagamento cancelado');
+  });
+});
+
 test.describe('temas', () => {
   for (const tema of ['atrium', 'cera', 'aerarium']) {
     test(`${tema} mantém contraste de texto acima de AA`, async ({ page }) => {
@@ -246,7 +296,9 @@ test.describe('editar lançamento', () => {
   test('a observação aparece na tabela', async ({ page }) => {
     await destrancar(page);
     await page.click('#menu button[data-view="lancamentos"]');
-    await expect(page.locator('#view table')).toContainText('conferido com o informe');
+    // primeira tabela: a de eventos corporativos nasce depois dela
+    await expect(page.locator('#view table').first())
+      .toContainText('conferido com o informe');
   });
 
   test('lançamento já estornado não oferece detalhes', async ({ page }) => {

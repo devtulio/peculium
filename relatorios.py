@@ -366,6 +366,11 @@ def custos(conn, ano: int | None = None) -> Relatorio:
                   " count(*) AS n, sum(l.custos) AS custos FROM lancamentos l"
                   " LEFT JOIN instituicoes i ON i.id = l.instituicao_id"
                   " WHERE l.tipo IN ('COMPRA','VENDA') AND l.estorna_id IS NULL"
+                  # o par de estorno some INTEIRO: faltava excluir o lançamento
+                  # estornado, e o custo dele seguia somando num relatório cujo
+                  # negócio o razão já tinha tirado da carteira
+                  "   AND l.id NOT IN (SELECT estorna_id FROM lancamentos"
+                  "                    WHERE estorna_id IS NOT NULL)"
                   + filtro + " GROUP BY mes, i.nome ORDER BY mes", parametros)]
     # O que denuncia negócio sem custo é NÃO TER NOTA, não ter custo zero: numa
     # nota grande o rateio de uma linha pequena arredonda para zero legitimamente.

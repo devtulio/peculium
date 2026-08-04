@@ -198,7 +198,22 @@ def apurar(ap: razao.Apuracao) -> Fisco:
             f"mensal: o imposto é retido na fonte pela tabela regressiva e é "
             f"definitivo. Entram no informe anual como tributação exclusiva.")
 
+    ano_corrente = ""
     for competencia in sorted(por_mes):
+        # IN RFB 1585 art. 63 §5: o IRRF de renda variável abate o imposto dos
+        # meses seguintes **do mesmo ano-calendário**; o que sobra em 31/12 vai
+        # para o ajuste anual da DIRPF, não para janeiro. O prejuízo, esse sim,
+        # atravessa anos sem prazo — e por isso não é zerado aqui.
+        if competencia[:4] != ano_corrente:
+            if ano_corrente:
+                sobra = round(sum(f.irrf_a_compensar.values()), 2)
+                if sobra:
+                    f.avisos.append(
+                        f"R$ {_brl(sobra)} de IRRF sobraram sem imposto que abater "
+                        f"em {ano_corrente} — esse saldo não passa para o ano "
+                        f"seguinte: entra como imposto pago na declaração anual")
+            f.irrf_a_compensar = {b: 0.0 for b in ALIQUOTA}
+            ano_corrente = competencia[:4]
         vendas = por_mes[competencia]
         grupos = {nome: [v for v in vendas if balde_de(v) == nome] for nome in ALIQUOTA}
         grupos[SWING] = _isencao(f, competencia, grupos[SWING])
