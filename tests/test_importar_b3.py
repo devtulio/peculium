@@ -516,3 +516,18 @@ def test_subscricao_entra_na_posicao_pelo_valor_pago(tmp_path, conn):
     (p,) = razao.carteira(conn)
     assert (p.ticker, p.quantidade) == ("MXRF13", 4)
     assert p.custo_total == pytest.approx(38.56)   # não entra a custo zero
+
+
+@pytest.mark.parametrize("ticker", [
+    "CDB3268VM70",   # termina em dígito — era o caso que virava pergunta
+    "CDB726AM6KA", "CDB626BO9OA", "LCI123ABC7", "RDB99XYZ12",
+])
+def test_codigo_de_renda_fixa_dispensa_confirmacao(ticker):
+    """O prefixo já diz o que é: perguntar a classe de um código que começa com
+    CDB é pedir ao usuário para confirmar o óbvio."""
+    assert b3.classe_provavel(ticker) == ("RF", False)
+
+
+def test_sufixo_11_continua_pedindo_confirmacao():
+    """A contraprova: 11 é FII, ETF ou unit, e a classe muda a alíquota."""
+    assert b3.classe_provavel("SNAG11") == ("FII", True)

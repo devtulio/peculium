@@ -206,6 +206,12 @@ def classe_provavel(ticker: str) -> tuple[str, bool]:
     muda a alíquota do IR. Nunca decidir sozinho nesse caso."""
     if ticker.upper().startswith("TESOURO-"):
         return "TESOURO", False     # código derivado do próprio nome do papel
+    if _PREFIXO_RF.match(ticker.upper()) and _CODIGO_RF.fullmatch(ticker.upper()):
+        # o prefixo já diz o que é: perguntar a classe de um código que começa
+        # com CDB é pedir ao usuário para confirmar o óbvio. Sem isto, só os
+        # códigos que NÃO terminam em dígito eram reconhecidos — `CDB726AM6KA`
+        # passava e `CDB3268VM70` virava pergunta.
+        return "RF", False
     if _CODIGO_RF.fullmatch(ticker.upper()) and not re.search(r"\d+$", ticker):
         return "RF", False          # código de papel de renda fixa: CDB726AWP4H
     sufixo = re.search(r"(\d+)$", ticker)
@@ -221,6 +227,8 @@ def classe_provavel(ticker: str) -> tuple[str, bool]:
     return "", True
 
 
+# prefixos que a B3 usa no código do papel de renda fixa
+_PREFIXO_RF = re.compile(r"^(CDB|RDB|LCI|LCA|LC|LF|CRI|CRA|DEB)\d")
 _CODIGO_RF = re.compile(r"\b([A-Z]{2,}\d[A-Z0-9]{4,})\b")
 
 

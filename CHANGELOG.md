@@ -3,6 +3,15 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.9.1] — 2026-08-03
+
+### Corrigido
+
+- **Código de renda fixa terminado em dígito pedia confirmação de classe.** O
+  prefixo já diz o que é: `CDB726AM6KA` era reconhecido e `CDB3268VM70` virava
+  pergunta, só porque termina em número. Perguntar a classe de um código que
+  começa com CDB é pedir para confirmar o óbvio.
+
 ## [0.9.0] — 2026-08-03
 
 ### Corrigido — o motor de importação montava a carteira errada
