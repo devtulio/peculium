@@ -3,6 +3,60 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.11.1] — 2026-08-04
+
+Segunda rodada da auditoria, agora **contra a API e os arquivos de verdade**. A
+primeira foi estática e de unidade e passou por cima destes três: nenhum deles
+existe fora do encontro com o mundo real.
+
+### Corrigido — a curva de renda fixa nunca funcionou
+
+Dois defeitos empilhados, e o segundo só aparecia depois de corrigir o primeiro.
+
+- **A série diária do Banco Central nunca descia.** `baixar()` pedia a série
+  inteira de uma vez e a API do SGS **recusa** pedido longo de série diária.
+  Medido contra a API: sem intervalo devolve `406 Not Acceptable`, 11 anos idem,
+  10 anos estoura o tempo de leitura, 2 anos passa. CDI e Selic diária falhavam
+  em silêncio, e a renda fixa dizia "ligue a rede em Configurações" com a rede
+  ligada. Agora vai em fatias de 5 anos, emendadas — vão entre elas seria o
+  defeito de série furada de volta.
+- **E não adiantaria baixar.** `atualizar_curvas` pedia sempre a curva de
+  **hoje**, e o Banco Central publica o CDI com um dia útil de atraso: falharia
+  todo dia, dizendo "atualize as séries" logo depois de atualizá-las. Agora
+  calcula até onde a série alcança e grava o PU **na data em que ele vale** —
+  adiantá-lo seria inventar um dia de rendimento. `cotacoes.preco()` já cobre a
+  diferença, porque procura a última cotação até a data pedida.
+- **A tabela mostrava o PU certo E o aviso de série faltando na mesma linha.**
+  `posicao()` não aplicava o mesmo recorte. Aviso que grita sem motivo é o que
+  faz o usuário parar de ler avisos.
+
+### Corrigido — transferência da corretora para ela mesma
+
+Num acervo real a B3 traz débito e crédito na **mesma** corretora: troca de
+conta ou de custódia dentro dela, que não move nada entre instituições. O par
+virava um lançamento de transferência de A para A, com dois estragos:
+
+- a **porta manual recusa exatamente isso** (`lancar` exige instituições
+  diferentes), então o importador gravava o que o razão proíbe — `gravar()` faz
+  `INSERT` direto e nenhuma validação do razão alcança o dado importado;
+- o razão debitava antes de creditar e gritava **"saldo negativo"** numa posição
+  que fecha em zero. Eram três alarmes graves no painel, todos falsos.
+
+A comparação é pelo nome **normalizado**: no arquivo real as duas pontas vinham
+como "TORO CTVM LTDA" e "TORO CTVM", que comparadas cruas passariam batido.
+
+### Verificado e íntegro
+
+O que a mesma varredura exercitou contra dado real e passou: cotação online do
+Yahoo, consulta de CNPJ na ReceitaWS, os **10 relatórios** em HTML e CSV (sem
+estouro, colunas alinhadas), as 9 telas da API, os juros de mora com a Selic
+mensal de verdade, e o leitor de posição contra **seis consolidados anuais**
+(2020 a 2025), que trouxe datas, classes e valores corretos em todos.
+
+Custo de aquisição confere pelas cinco portas que o calculam — razão, painel,
+carteira, relatório de posição e relatório de bens —, e o mesmo vale para valor
+de mercado e proventos.
+
 ## [0.11.0] — 2026-08-04
 
 Auditoria do sistema inteiro: 17 módulos lidos linha a linha, cada hipótese

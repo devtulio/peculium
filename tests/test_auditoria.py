@@ -125,11 +125,106 @@ def test_valor_vazio_do_sgs_nao_derruba_o_download(conn):
     """O SGS devolve "" em algumas datas; fora do try, isso matava o download
     inteiro em vez de virar uma linha ignorada."""
     conn.execute("INSERT OR REPLACE INTO config VALUES ('cotacao_online','1')")
-    r = series.baixar(conn, ["CDI"], buscador=lambda *_: [
-        {"data": "01/07/2026", "valor": "0.05"},
-        {"data": "02/07/2026", "valor": ""},
-        {"data": "03/07/2026", "valor": "0.05"}])
+    r = series.baixar(conn, ["CDI"], inicio="2026-07-01", fim="2026-07-31",
+                      buscador=lambda *_: [
+                          {"data": "01/07/2026", "valor": "0.05"},
+                          {"data": "02/07/2026", "valor": ""},
+                          {"data": "03/07/2026", "valor": "0.05"}])
     assert r.gravados == 2 and not r.falhas
+
+
+def test_serie_diaria_e_pedida_em_fatias(conn):
+    """A API do SGS **recusa** pedido longo de série diária, e era assim que o
+    programa pedia: sem intervalo nenhum.
+
+    Medido contra a API de verdade: sem intervalo devolve `406 Not Acceptable`,
+    11 anos idem, 10 anos estoura o tempo, 2 anos passa. Como `baixar()` pedia a
+    série inteira de uma vez, CDI e Selic diária **nunca desciam** — e a curva de
+    renda fixa ficava permanentemente sem calcular, dizendo "ligue a rede em
+    Configurações" com a rede já ligada."""
+    conn.execute("INSERT OR REPLACE INTO config VALUES ('cotacao_online','1')")
+    pedidos = []
+
+    def buscador(codigo, inicio, fim):
+        pedidos.append((inicio, fim))
+        return []
+
+    series.baixar(conn, ["CDI"], buscador=buscador)
+    assert len(pedidos) > 1, "a série diária tem de ser pedida em fatias"
+    for inicio, fim in pedidos:
+        anos = (date.fromisoformat(fim) - date.fromisoformat(inicio)).days / 365.25
+        assert anos <= series.JANELA_ANOS + 0.1, f"fatia de {anos:.1f} anos"
+    # as fatias se emendam: buraco entre elas seria o defeito do § 1.3 de volta
+    for (_, fim), (inicio, _) in zip(pedidos, pedidos[1:]):
+        assert inicio == fim
+
+
+def test_serie_mensal_continua_vindo_inteira(conn):
+    """Só a diária tem o limite. Fatiar a mensal seria pedido a mais sem ganho —
+    e a Selic mensal precisa vir desde 1986 para os juros de mora de um DARF
+    antigo fecharem."""
+    conn.execute("INSERT OR REPLACE INTO config VALUES ('cotacao_online','1')")
+    pedidos = []
+
+    def buscador(codigo, inicio, fim):
+        pedidos.append((inicio, fim))
+        return []
+
+    series.baixar(conn, ["SELIC_MENSAL"], buscador=buscador)
+    assert pedidos == [(None, None)]
+
+
+def test_curva_calcula_ate_onde_a_serie_alcanca(conn):
+    """O BCB publica o CDI com um dia útil de atraso: pedir a curva de HOJE
+    falhava todo dia, com "atualize as séries" logo depois de atualizá-las.
+
+    O PU fica gravado na data em que ele vale — adiantá-lo para hoje seria
+    inventar um dia de rendimento. Quem cobre a diferença é `cotacoes.preco()`,
+    que já procura a última cotação até a data pedida."""
+    import cotacoes
+    import renda_fixa as rf
+    conn.execute("INSERT INTO ativos (id, ticker, classe) VALUES (9,'CDB1','RF')")
+    _serie(conn)                                   # série vai até certo dia
+    fim_da_serie = series.cobertura(conn, "CDI")[1]
+    rf.cadastrar(conn, ativo_id=9, emissao="2026-01-02", indexador="CDI", taxa=100)
+
+    depois = (date.fromisoformat(fim_da_serie) + timedelta(days=3)).isoformat()
+    r = rf.atualizar_curvas(conn, depois)
+    assert r.atualizados == 1 and not r.falhas
+    assert r.ate == fim_da_serie
+    # gravado na data em que vale, e a carteira o enxerga mesmo pedindo depois
+    assert cotacoes.preco(conn, 9, fim_da_serie) > 1.0
+    assert cotacoes.preco(conn, 9, depois) == cotacoes.preco(conn, 9, fim_da_serie)
+
+
+def test_serie_que_comeca_tarde_demais_continua_falhando(conn):
+    """O recorte é só no FIM. Série que começa depois da emissão é buraco de
+    verdade, e continua recusando — senão a curva sairia contada pela metade."""
+    import renda_fixa as rf
+    conn.execute("INSERT INTO ativos (id, ticker, classe) VALUES (9,'CDB1','RF')")
+    _serie(conn)
+    rf.cadastrar(conn, ativo_id=9, emissao="2020-01-02", indexador="CDI", taxa=100)
+    r = rf.atualizar_curvas(conn, "2026-04-30")
+    assert r.atualizados == 0 and "CDB1" in r.falhas
+
+
+def test_posicao_nao_avisa_do_que_ja_resolveu(conn):
+    """A tabela mostrava o PU certo E o aviso "atualize as séries" na mesma
+    linha: `posicao()` pedia a curva de hoje, o CDI de hoje ainda não saiu, e o
+    valor vinha do fallback. Aviso que grita sem motivo é o que faz o usuário
+    parar de ler avisos."""
+    import renda_fixa as rf
+    conn.execute("INSERT INTO ativos (id, ticker, classe) VALUES (9,'CDB1','RF')")
+    _serie(conn)
+    fim = series.cobertura(conn, "CDI")[1]
+    rf.cadastrar(conn, ativo_id=9, emissao="2026-01-02", indexador="CDI", taxa=100)
+    lanc.lancar(conn, data="2026-01-02", tipo="COMPRA", ativo=9, instituicao=1,
+                quantidade=1000, preco=1, hoje=HOJE)
+
+    depois = (date.fromisoformat(fim) + timedelta(days=3)).isoformat()
+    (linha,) = rf.posicao(conn, depois)
+    assert linha["erro"] is None
+    assert linha["pu"] > 1.0 and linha["bruto"] > 1000
 
 
 # ------------------------------------------------------- § 2.1 DARF parcial

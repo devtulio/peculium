@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.11.0</title>
+<title>Manual Operacional — Peculium v0.11.1</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.11.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.11.1 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.11.0</div>
+  <div class="versao">VERSÃO 0.11.1</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.11.0.exe" --verificar</pre>
+<pre>"Peculium v0.11.1.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -228,6 +228,16 @@ grupamento de 10:1 é <code>0,1</code>.</p>
 <p>Desdobramento e grupamento mudam a quantidade e <strong>não</strong> o custo
 total — o preço médio se ajusta sozinho, que é o efeito correto. O evento vale
 para quem já tinha o ativo na data-ex, então lançá-lo depois reescreve o passado.</p>
+
+<h3>Por que o preço da renda fixa é de ontem</h3>
+
+<p>O Banco Central publica o CDI com <strong>um dia útil de atraso</strong>. A
+curva é calculada até o último dia que a série cobre, e o preço unitário fica
+gravado <strong>na data em que ele vale</strong> — não em hoje.</p>
+
+<p>Adiantar o PU para hoje seria inventar um dia de rendimento. A carteira
+continua mostrando o valor certo: ela procura a última cotação conhecida até a
+data consultada.</p>
 
 <h3>Digitar o preço à mão</h3>
 

@@ -68,6 +68,7 @@ class Resultado:
     atualizados: int = 0
     ignorados: int = 0                       # havia preço manual na data
     falhas: dict[str, str] = field(default_factory=dict)
+    ate: str = ""                            # data do PU mais recente gravado
 
 
 def _linha(r) -> Titulo:
@@ -159,20 +160,40 @@ def pu(conn, ativo_id: int, data: str | None = None) -> float:
 
 def atualizar_curvas(conn, data: str | None = None) -> Resultado:
     """Grava o PU de cada título em `cotacoes`. A partir daí carteira, painel e
-    relatórios enxergam renda fixa sem saber que ela é diferente."""
+    relatórios enxergam renda fixa sem saber que ela é diferente.
+
+    **Calcula até onde a série alcança, não até hoje.** O Banco Central publica
+    o CDI com um dia útil de atraso, então pedir a curva de hoje falhava *todo
+    dia* — "atualize as séries" logo depois de atualizar as séries. O PU fica
+    gravado na data em que ele de fato vale; `cotacoes.preco()` já procura a
+    última cotação até a data pedida, e é ela que a carteira consulta.
+
+    Adiantar o PU para hoje seria inventar um dia de rendimento."""
     data = data or date.today().isoformat()
     resultado = Resultado()
     for t in listar(conn):
+        quando = _ate_onde_calcula(conn, t, data)
         try:
-            valor = pu(conn, t.ativo_id, data)
+            valor = pu(conn, t.ativo_id, quando)
         except series.SerieIndisponivel as e:
             resultado.falhas[t.ticker] = str(e)
             continue
-        if cotacoes.registrar(conn, t.ativo_id, data, valor, CURVA):
+        if cotacoes.registrar(conn, t.ativo_id, quando, valor, CURVA):
             resultado.atualizados += 1
+            resultado.ate = max(resultado.ate, quando)
         else:
             resultado.ignorados += 1
     return resultado
+
+
+def _ate_onde_calcula(conn, t: Titulo, data: str) -> str:
+    """A última data em que a curva deste papel é calculável, sem passar de
+    `data`. Para CDI e prefixado quem manda é a série do CDI — no prefixado ela
+    é o calendário de dias úteis."""
+    if t.indexador not in ("CDI", "PRE"):
+        return data
+    faixa = series.cobertura(conn, "CDI")
+    return min(data, faixa[1]) if faixa else data
 
 
 def ir_estimado(conn, ativo_id: int, resgate: str, ganho: float) -> dict:
@@ -256,7 +277,12 @@ def posicao(conn, data: str | None = None) -> list[dict]:
             unitario = cotacoes.preco(conn, p.ativo_id, data)
         else:
             try:
-                unitario, erro = pu(conn, p.ativo_id, data), None
+                # o mesmo recorte de `atualizar_curvas`: sem ele a tabela
+                # mostrava o PU certo E o aviso "atualize as séries" na mesma
+                # linha, porque o CDI de hoje ainda não foi publicado. Aviso que
+                # grita sem motivo é o que faz o usuário parar de ler avisos.
+                unitario, erro = pu(conn, p.ativo_id,
+                                    _ate_onde_calcula(conn, t, data)), None
             except series.SerieIndisponivel as e:
                 unitario = cotacoes.preco(conn, p.ativo_id, data)
                 erro = str(e)

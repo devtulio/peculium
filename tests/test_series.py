@@ -42,9 +42,12 @@ def test_desligada_nao_busca(conn):
 
 
 def test_grava_e_converte_a_data(conn):
-    r = series.baixar(conn, ["CDI"], buscador=lambda *a: [
-        {"data": "02/01/2026", "valor": "0.052531"},
-        {"data": "05/01/2026", "valor": "0.052531"}])
+    # janela explícita: sem ela a série DIÁRIA é pedida em fatias, e o buscador
+    # falso devolveria as mesmas duas linhas em cada uma
+    r = series.baixar(conn, ["CDI"], inicio="2026-01-01", fim="2026-01-31",
+                      buscador=lambda *a: [
+                          {"data": "02/01/2026", "valor": "0.052531"},
+                          {"data": "05/01/2026", "valor": "0.052531"}])
     assert r.gravados == 2
     assert conn.execute("SELECT data FROM series ORDER BY data").fetchone()[0] \
         == "2026-01-02"                       # guarda ISO, a API devolve BR

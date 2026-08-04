@@ -144,6 +144,59 @@ def test_portabilidade_com_as_duas_pontas_vira_um_lancamento(tmp_path, conn):
     assert set(conf.instituicoes_novas) == {"ALFA", "BETA"}
 
 
+def test_debito_e_credito_na_mesma_corretora_nao_e_portabilidade(tmp_path, conn):
+    """Achado num acervo real: a B3 traz débito e crédito na MESMA corretora —
+    troca de conta ou de custódia dentro dela, que não move nada entre
+    instituições.
+
+    O par virava um lançamento de transferência de A para A. Dois estragos: a
+    porta manual **recusa** exatamente isso (`lancar` exige instituições
+    diferentes), então o importador gravava o que o razão proíbe; e o razão
+    debitava antes de creditar, gritando "saldo negativo" numa posição que fecha
+    em zero. Eram três alarmes graves no painel, todos falsos."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;05/02/2020;Transferência;ITSA4 - ITAUSA;TORO CTVM LTDA;100;10,00;1.000,00",
+        "Credito;05/02/2020;Transferência;ITSA4 - ITAUSA;TORO CTVM;100;10,00;1.000,00")
+    conf = b3.ler(arq, conn)
+    assert conf.por_situacao(b3.NOVA) == []
+    assert conf.por_situacao(b3.PENDENTE) == []
+    # as duas linhas continuam visíveis com motivo: sumir em silêncio esconderia
+    # uma linha que o arquivo tinha
+    ignoradas = conf.por_situacao(b3.IGNORADA)
+    assert len(ignoradas) == 2
+    assert all("mesma instituição" in i.motivo for i in ignoradas)
+
+
+def test_o_importador_nao_grava_o_que_a_porta_manual_recusa(tmp_path, conn):
+    """`importar_b3.gravar` faz INSERT direto, sem passar por
+    `lancamentos.lancar` — então nenhuma validação do razão alcança o dado
+    importado. Esta é a invariante que o defeito da TORO quebrou."""
+    import lancamentos
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;05/02/2020;Transferência;ITSA4 - ITAUSA;TORO CTVM LTDA;100;10,00;1.000,00",
+        "Credito;05/02/2020;Transferência;ITSA4 - ITAUSA;TORO CTVM LTDA;100;10,00;1.000,00")
+    conf = b3.ler(arq, conn)
+    b3.gravar(conn, conf, {t: "ACAO" for t in conf.ativos_novos})
+    iguais = conn.execute(
+        "SELECT count(*) FROM lancamentos WHERE tipo='TRANSFERENCIA'"
+        " AND instituicao_id = instituicao_destino_id").fetchone()[0]
+    assert iguais == 0, "gravou transferência que lancar() recusaria"
+    assert lancamentos.TRANSFERENCIA == "TRANSFERENCIA"
+
+
+def test_transferencia_entre_corretoras_diferentes_continua_valendo(tmp_path, conn):
+    """A trava é só para origem igual ao destino. Portabilidade de verdade não
+    pode ser engolida junto."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;01/06/2026;Transferência;PETR4 - PETROLEO;ALFA CTVM;100;10,00;1.000,00",
+        "Credito;01/06/2026;Transferência;PETR4 - PETROLEO;BETA DTVM;100;10,00;1.000,00")
+    (nova,) = b3.ler(arq, conn).por_situacao(b3.NOVA)
+    assert (nova.instituicao, nova.destino) == ("ALFA CTVM", "BETA DTVM")
+
+
 def test_portabilidade_com_uma_ponta_so_fica_pendente(tmp_path, conn):
     """Metade da portabilidade não diz para onde o papel foi, e lançar assim
     moveria a posição para o nada."""

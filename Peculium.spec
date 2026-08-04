@@ -11,7 +11,7 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-VERSAO = "0.11.0"
+VERSAO = "0.11.1"
 
 # Recurso de versão do Windows. Binário sem assinatura E sem metadado não tem
 # nada por onde ganhar reputação: o Explorer mostra "Publicador desconhecido" e

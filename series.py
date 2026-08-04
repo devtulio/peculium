@@ -34,6 +34,34 @@ TIMEOUT = 20
 # feriado, é pedaço faltando.
 MAIOR_VAO = 10
 
+# A API do SGS **recusa** pedido longo de série diária. Medido contra a API, não
+# suposto: sem intervalo devolve `406 Not Acceptable`, 11 anos idem, 10 anos
+# estoura o tempo de leitura, 2 anos passa em 502 registros. Como `baixar()`
+# pedia a série inteira de uma vez, CDI e Selic diária **nunca** desciam — e a
+# curva de renda fixa ficava permanentemente sem calcular, com a mensagem
+# "ligue a rede em Configurações" mesmo com a rede ligada.
+JANELA_ANOS = 5
+# Quanto voltar quando não há nada guardado. Cobre com folga o CDB mais longo
+# (costumam ir a 6 anos) sem pedir os 40 anos que a série tem.
+RETROCEDER_ANOS = 15
+
+
+def _fatias(inicio: str, fim: str, anos: int = JANELA_ANOS) -> list[tuple[str, str]]:
+    """Parte [inicio, fim] em pedaços que a API aceita."""
+    saida, ini = [], date.fromisoformat(inicio)
+    limite = date.fromisoformat(fim)
+    while ini <= limite:
+        try:
+            proximo = ini.replace(year=ini.year + anos)
+        except ValueError:                     # 29/02 num ano sem bissexto
+            proximo = ini.replace(year=ini.year + anos, day=28)
+        fim_fatia = min(proximo, limite)
+        saida.append((ini.isoformat(), fim_fatia.isoformat()))
+        if fim_fatia >= limite:
+            break
+        ini = fim_fatia
+    return saida
+
 # nome interno -> código da série no SGS
 SERIES = {"CDI": 12, "SELIC": 11, "IPCA": 433, "SELIC_MENSAL": 4390}
 DIARIAS = ("CDI", "SELIC")          # em % ao dia; IPCA e SELIC_MENSAL são mensais
@@ -97,7 +125,13 @@ def baixar(conn, indices: list[str] | None = None, inicio: str | None = None,
             if indice in DIARIAS and buraco(conn, indice, ja[0], ja[1]):
                 desde = inicio or ja[0]
         try:
-            linhas = buscador(SERIES[indice], desde, fim)
+            if indice in DIARIAS:
+                # em fatias, senão a API devolve 406 e a série nunca desce
+                linhas = []
+                for a, b in _fatias(desde or _retroceder(), fim or hoje_iso()):
+                    linhas += buscador(SERIES[indice], a, b)
+            else:
+                linhas = buscador(SERIES[indice], desde, fim)
         except (urllib.error.URLError, OSError, ValueError, TypeError) as e:
             resultado.falhas[indice] = f"{type(e).__name__}: {e}"
             continue
@@ -209,3 +243,8 @@ def fator(conn, indexador: str, inicio: str, fim: str, taxa: float) -> float:
 
 def hoje_iso() -> str:
     return date.today().isoformat()
+
+
+def _retroceder(anos: int = RETROCEDER_ANOS) -> str:
+    hoje = date.today()
+    return hoje.replace(year=hoje.year - anos).isoformat()

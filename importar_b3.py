@@ -422,6 +422,23 @@ def _parear_transferencias(coletadas: list[tuple[int, dict]], conf: Conferencia,
         if saida and entrada:
             origem = str(saida[1].get("instituicao") or "").strip()
             destino = str(entrada[1].get("instituicao") or "").strip()
+            if textos.nome_instituicao(origem) == textos.nome_instituicao(destino):
+                # Débito e crédito na MESMA corretora não é portabilidade: é
+                # troca de conta ou de custódia dentro dela, e não move nada
+                # entre instituições. Num acervo real a B3 trouxe três dessas na
+                # TORO, e cada uma virava um lançamento que a porta manual
+                # RECUSA (`lancar` exige instituições diferentes) e que fazia o
+                # razão gritar "saldo negativo" no débito antes de o crédito
+                # entrar — três alarmes graves no painel para posição que fecha
+                # em zero.
+                for lado in (saida, entrada):
+                    conf.linhas.append(Linha(
+                        lado[0], IGNORADA, ticker=ticker, data=data,
+                        instituicao=origem, quantidade=quantidade,
+                        motivo=f"débito e crédito na mesma instituição "
+                               f"({origem}): troca de conta ou custódia, não "
+                               f"muda a posição em lugar nenhum"))
+                continue
             campos = ("transferencia", data, ticker, origem, destino,
                       f"{quantidade:.8f}")
             chave = "|".join(campos)
