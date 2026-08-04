@@ -323,8 +323,11 @@ class Item:
     negocio: Negocio
     situacao: str
     ativo_id: int | None = None
-    lancamento_id: int | None = None
     motivo: str = ""
+    # lançamentos da B3 que esta linha da nota substitui. Lista, e não um id,
+    # porque a B3 agrupa execuções que a nota detalha: um item da nota pode
+    # substituir vários lançamentos, e vários itens podem substituir um só.
+    substitui: list[int] = field(default_factory=list)
 
 
 @dataclass
@@ -349,14 +352,8 @@ def conferir(conn, nota: Nota) -> Conferencia:
                       (nota.numero, nota.cnpj, nota.data_pregao)).fetchone()
     conf.ja_importada = ja is not None
 
-    ativos = {str(r[0]).upper(): r[1] for r in conn.execute("SELECT ticker, id FROM ativos")}
-    apelidos = {r[0]: r[1] for r in conn.execute("SELECT especificacao, ativo_id FROM apelidos")}
-    usados: set[int] = set()
-
     for negocio in nota.negocios:
-        ativo_id = ativos.get(negocio.ticker) if negocio.ticker else None
-        if ativo_id is None:
-            ativo_id = apelidos.get(negocio.especificacao)
+        ativo_id = _resolver(conn, negocio)
         if ativo_id is None:
             # Vale tanto para "a nota não diz o código" quanto para "diz, mas o
             # ativo ainda não existe" — o segundo caso é o do FII, que traz o
@@ -368,28 +365,76 @@ def conferir(conn, nota: Nota) -> Conferencia:
                         "a nota não traz o código; informe o ticker uma vez e o "
                         "sistema passa a reconhecer")))
             continue
+        conf.itens.append(Item(negocio, CRIA, ativo_id))
+    _reconciliar(conn, conf)
+    return conf
 
-        candidato = None
-        if ativo_id is not None:
-            for linha in conn.execute(
-                    "SELECT id, quantidade, preco FROM lancamentos"
-                    " WHERE data=? AND tipo=? AND ativo_id=? AND nota_id IS NULL"
-                    "   AND estorna_id IS NULL"
-                    "   AND id NOT IN (SELECT estorna_id FROM lancamentos"
-                    "                  WHERE estorna_id IS NOT NULL)",
-                    (nota.data_pregao, negocio.sentido, ativo_id)):
-                if linha[0] in usados or abs(linha[1] - negocio.quantidade) > 1e-9 \
-                        or abs(linha[2] - negocio.preco) > TOL_PRECO:
-                    continue
-                candidato = linha[0]
-                usados.add(candidato)
-                break
-        if candidato is not None:
-            conf.itens.append(Item(negocio, ENRIQUECE, ativo_id, candidato,
-                                   "negócio já veio da B3: a nota acrescenta os custos"))
-        else:
-            conf.itens.append(Item(negocio, CRIA, ativo_id,
-                                   motivo="sem contraparte na B3: a nota cria o negócio"))
+
+def _resolver(conn, negocio: Negocio) -> int | None:
+    """Ativo do negócio, pelo código da nota ou pelo apelido já aprendido."""
+    if negocio.ticker:
+        linha = conn.execute("SELECT id FROM ativos WHERE upper(ticker)=?",
+                             (negocio.ticker.upper(),)).fetchone()
+        if linha:
+            return linha[0]
+    linha = conn.execute("SELECT ativo_id FROM apelidos WHERE especificacao=?",
+                         (negocio.especificacao,)).fetchone()
+    return linha[0] if linha else None
+
+
+def _reconciliar(conn, conf: Conferencia) -> None:
+    """Casa a nota com o que já veio da B3 **no agregado do dia**.
+
+    Duas coisas que a versão anterior errava, e que juntas dobravam a carteira:
+
+    **Casava linha a linha.** A B3 agrupa execuções que a nota detalha — num dia
+    real ela trouxe SNAG11 como 68+12 e a nota como 1+11+68. Nenhuma linha casa
+    com nenhuma, e o negócio inteiro entrava de novo por cima do da B3. Somando
+    o dia, 80 = 80 e a nota substitui o que estava lá.
+
+    **Rodava antes de o ticker ser resolvido.** Para o papel cujo código a nota
+    não traz, o `conferir` não tinha como saber o ativo, então nunca achava
+    contraparte — e a primeira nota de cada papel duplicava. Agora esta função é
+    chamada duas vezes: no `conferir`, para a tela, e de novo no `gravar`, com
+    os tickers que o usuário informou.
+
+    Quantidades diferentes no agregado **não** são reconciliadas: aí é negócio
+    de verdade diferente, e apagar o da B3 perderia lançamento."""
+    nota = conf.nota
+    grupos: dict[tuple[int, str], list[Item]] = {}
+    for item in conf.itens:
+        if item.ativo_id is not None:
+            grupos.setdefault((item.ativo_id, item.negocio.sentido), []).append(item)
+
+    for (ativo_id, sentido), itens in grupos.items():
+        linhas = list(conn.execute(
+            "SELECT id, quantidade, valor FROM lancamentos"
+            " WHERE data=? AND tipo=? AND ativo_id=? AND nota_id IS NULL"
+            "   AND estorna_id IS NULL"
+            "   AND id NOT IN (SELECT estorna_id FROM lancamentos"
+            "                  WHERE estorna_id IS NOT NULL)",
+            (nota.data_pregao, sentido, ativo_id)))
+        da_nota = sum(i.negocio.quantidade for i in itens)
+        da_b3 = sum(l["quantidade"] for l in linhas)
+        valor_nota = sum(i.negocio.valor for i in itens)
+        valor_b3 = sum(l["valor"] for l in linhas)
+        # quantidade E valor: só a quantidade colaria a nota no negócio errado
+        # quando há duas ordens do mesmo papel no dia com preços diferentes
+        substitui = (bool(linhas) and abs(da_b3 - da_nota) < 1e-9
+                     and abs(valor_b3 - valor_nota) <= max(0.02, 0.001 * valor_b3))
+        for indice, item in enumerate(itens):
+            if substitui:
+                item.situacao = ENRIQUECE
+                item.motivo = ("negócio já veio da B3: a nota substitui o do dia "
+                               "e acrescenta os custos")
+                # os estornos ficam todos no primeiro item do grupo: são um por
+                # lançamento da B3, e o grupo pode ter contagens diferentes dos
+                # dois lados
+                item.substitui = [l["id"] for l in linhas] if indice == 0 else []
+            else:
+                item.situacao = CRIA
+                item.motivo = "sem contraparte na B3: a nota cria o negócio"
+                item.substitui = []
     return conf
 
 
@@ -446,23 +491,29 @@ def gravar(conn, conf: Conferencia, tickers: dict[str, str] | None = None,
         conn.execute("INSERT OR REPLACE INTO apelidos (especificacao, ativo_id, criado_em)"
                      " VALUES (?,?,?)", (item.negocio.especificacao, item.ativo_id, agora))
 
+    # AGORA, com todos os tickers resolvidos, a reconciliação enxerga o que não
+    # enxergava no `conferir`: era exatamente aqui que a primeira nota de cada
+    # papel duplicava o negócio que já viera da B3
+    _reconciliar(conn, conf)
+
     instituicao_id = _instituicao(conn, nota, agora)
     criados = enriquecidos = 0
     for indice, item in enumerate(conf.itens):
         negocio = item.negocio
         if item.ativo_id is None:      # trava: negócio sem ativo corrompe o razão
             raise ValueError(f"negócio sem ativo resolvido: {negocio.especificacao}")
-        if item.lancamento_id is not None:
+        for lancamento_id in item.substitui:
             original = conn.execute("SELECT * FROM lancamentos WHERE id=?",
-                                    (item.lancamento_id,)).fetchone()
+                                    (lancamento_id,)).fetchone()
             conn.execute(
                 "INSERT INTO lancamentos (data, tipo, ativo_id, instituicao_id,"
                 " quantidade, preco, valor, origem, estorna_id, obs, criado_em)"
                 " VALUES (?,?,?,?,?,?,?,'ESTORNO',?,?,?)",
                 (original["data"], original["tipo"], original["ativo_id"],
                  original["instituicao_id"], original["quantidade"], original["preco"],
-                 original["valor"], item.lancamento_id,
+                 original["valor"], lancamento_id,
                  f"substituído pela nota {nota.numero}, que traz os custos", agora))
+        if item.situacao == ENRIQUECE:
             enriquecidos += 1
         else:
             criados += 1
@@ -480,14 +531,15 @@ def gravar(conn, conf: Conferencia, tickers: dict[str, str] | None = None,
 def _instituicao(conn, nota: Nota, agora: str) -> int | None:
     if not nota.cnpj and not nota.corretora:
         return None
-    linha = conn.execute("SELECT id FROM instituicoes WHERE cnpj=?", (nota.cnpj,)).fetchone()
-    if linha:
-        return linha[0]
+    import lancamentos
+
+    if nota.cnpj:
+        linha = conn.execute("SELECT id FROM instituicoes WHERE cnpj=?",
+                             (nota.cnpj,)).fetchone()
+        if linha:
+            return linha[0]
+    # o corte em " CORRETORA" tira metade do nome societário; do resto cuida
+    # `lancamentos.instituicao`, que é o MESMO ponto que o extrato da B3 usa —
+    # sem isso a nota e o extrato criavam dois cadastros da mesma corretora
     nome = (nota.corretora or nota.cnpj).split(" CORRETORA")[0].strip()
-    linha = conn.execute("SELECT id FROM instituicoes WHERE upper(nome)=?",
-                         (nome.upper(),)).fetchone()
-    if linha:
-        conn.execute("UPDATE instituicoes SET cnpj=? WHERE id=?", (nota.cnpj, linha[0]))
-        return linha[0]
-    return conn.execute("INSERT INTO instituicoes (nome, cnpj) VALUES (?,?)",
-                        (nome, nota.cnpj)).lastrowid
+    return lancamentos.instituicao(conn, nome, nota.cnpj)

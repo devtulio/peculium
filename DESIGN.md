@@ -150,6 +150,23 @@ seria um "apagou tudo" que não apagou tudo. Sobrevivem só `config` (preferênc
 não registro) e `series` (dado público do BCB em cache). Senha mestra e chave de
 recuperação não mudam: isto esvazia o cofre, não recria.
 
+### 3.5 Identidade da instituição
+
+A mesma corretora chega com nomes diferentes em cada documento. Num acervo real:
+`XP INVESTIMENTOS CCTVM S/A`, a mesma com ponto final, `XP INVESTIMENTOS` e o
+nome societário por extenso — quatro grafias, mais duas do Inter. Casando pelo
+texto cru são **seis cadastros para três corretoras**, e a posição por
+instituição perde o sentido.
+
+`textos.nome_instituicao()` reduz o nome ao de fantasia: sem acento, pontuação
+nem forma societária (`S/A`, `CCTVM`, `DTVM`, e as versões por extenso). O
+resultado vira a coluna `chave`, com índice único, e **todo** caminho que cria
+instituição passa por `lancamentos.instituicao()`.
+
+A busca normaliza o nome gravado na hora, em vez de confiar na coluna: assim uma
+linha que entrou por fora continua sendo encontrada. A coluna existe para o
+índice único, não para a busca.
+
 ## 4. Esquema SQLite
 
 ```sql
@@ -322,6 +339,31 @@ cofre) é tentada primeiro e é o único caminho garantido; os candidatos deriva
 do CPF são conveniência.
 
 Notas de **renda fixa** são outro assunto e têm módulo próprio — ver §6.3.
+
+### 6.1.1 Reconciliação nota × B3
+
+A nota e o extrato descrevem **o mesmo negócio** com granularidades e datas
+diferentes. Três regras, todas aprendidas errando:
+
+**Reconciliar depois de resolver o ticker, nunca antes.** A nota de renda
+variável não traz o código do papel; ele vem do usuário, ou de um apelido já
+aprendido. Enquanto a reconciliação rodava no `conferir` — antes da resposta —,
+o primeiro negócio de cada papel nunca achava contraparte e **duplicava**. A
+função é a mesma, chamada duas vezes: no `conferir` para a tela, e no `gravar`
+com os tickers já resolvidos.
+
+**Casar no agregado do dia, não linha a linha.** A B3 agrupa execuções que a
+nota detalha: 68+12 de um lado, 1+11+68 do outro. Somando o dia os dois fecham.
+Compara-se **quantidade e valor**: só a quantidade colaria a nota no negócio
+errado quando há duas ordens do mesmo papel no dia com preços diferentes.
+
+**Totais que não batem não são reconciliados.** Aí é negócio de verdade
+diferente, e apagar o da B3 perderia lançamento.
+
+Na renda fixa há ainda duas diferenças de forma: a nota é do dia da **negociação**
+e o extrato registra a **liquidação** (janela de seis dias), e os dois lados
+nomeiam o papel de jeitos diferentes quando a nota não traz código utilizável —
+casa-se por quantidade, PU e emissor, não pelo código.
 
 ## 6.2 Renda fixa (`renda_fixa.py`, `series.py`)
 

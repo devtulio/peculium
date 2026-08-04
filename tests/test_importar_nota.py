@@ -250,7 +250,7 @@ def test_negocio_da_b3_e_enriquecido_com_os_custos(conn):
         rubricas={"Taxa de liquidação": 0.30}))
     conf = nota.conferir(conn, n)
     (item,) = conf.itens
-    assert item.situacao == nota.ENRIQUECE and item.lancamento_id is not None
+    assert item.situacao == nota.ENRIQUECE and item.substitui
 
     resumo = nota.gravar(conn, conf)
     assert resumo["enriquecidos"] == 1 and resumo["criados"] == 0
@@ -349,3 +349,64 @@ def test_corretora_vira_instituicao_uma_vez(conn):
         nota.gravar(conn, nota.conferir(conn, n))
     assert conn.execute("SELECT count(*) FROM instituicoes").fetchone()[0] == 1
     assert conn.execute("SELECT cnpj FROM instituicoes").fetchone()[0] == "11222333000144"
+
+
+# ------------------------------- reconciliação: os dois defeitos que dobravam
+
+def test_primeira_nota_de_um_papel_nao_duplica_o_negocio_da_b3(conn):
+    """O defeito que dobrava a carteira.
+
+    A reconciliação rodava no `conferir`, ANTES de o usuário informar o ticker.
+    Para o papel cujo código a nota não traz, não havia como achar contraparte,
+    e o negócio entrava de novo por cima do que veio da B3 — KLBN4 com 570 onde
+    a corretora dizia 285. A partir da segunda nota o apelido já existia e
+    reconciliava certo, o que escondia o problema."""
+    _semear(conn)
+    conn.execute("INSERT INTO ativos (id, ticker, classe) VALUES (2,'KLBN4','ACAO')")
+    _b3(conn, "2026-07-21", "COMPRA", 2, 200, 3.50)
+    n = nota.parsear(montar(negocio("KLABIN S/A          PN", 200, 3.50, tags=["N2"]),
+                            rubricas={"Taxa de liquidação": 8.22}))
+    conf = nota.conferir(conn, n)
+    assert conf.itens[0].situacao == nota.SEM_ATIVO      # sem ticker, ainda
+
+    # o ticker chega só agora — e a reconciliação tem de acontecer DEPOIS dele
+    resumo = nota.gravar(conn, conf, tickers={"KLABIN S/A PN N2": "KLBN4"})
+    assert (resumo["criados"], resumo["enriquecidos"]) == (0, 1)
+    (pos,) = [p for p in razao.carteira(conn) if p.ticker == "KLBN4"]
+    assert pos.quantidade == 200                        # não 400
+    assert pos.custo_total == pytest.approx(708.22)      # 700 + os custos da nota
+
+
+def test_b3_agrupa_o_que_a_nota_detalha(conn):
+    """A B3 junta execuções que a nota lista separadas: num dia real ela trouxe
+    68+12 e a nota 1+11+68. Casar linha a linha não fecha nunca, e o negócio
+    inteiro entrava duplicado. Somando o dia, 80 = 80."""
+    _semear(conn)
+    _b3(conn, "2026-07-21", "COMPRA", 1, 68, 9.92)
+    _b3(conn, "2026-07-21", "COMPRA", 1, 12, 9.91)
+    n = nota.parsear(montar(
+        negocio("FII MAXI REN          MXRF11          CI", 1, 9.91),
+        negocio("FII MAXI REN          MXRF11          CI", 11, 9.91),
+        negocio("FII MAXI REN          MXRF11          CI", 68, 9.92),
+        rubricas={"Taxa de liquidação": 0.26}))
+    conf = nota.conferir(conn, n)
+    assert {i.situacao for i in conf.itens} == {nota.ENRIQUECE}
+    nota.gravar(conn, conf)
+    (pos,) = razao.carteira(conn)
+    assert pos.quantidade == 80                          # não 160
+    assert pos.custo_total == pytest.approx(793.48 + 0.26)
+
+
+def test_quantidade_diferente_no_dia_nao_reconcilia(conn):
+    """Se os totais do dia não batem, é negócio de verdade diferente — apagar o
+    da B3 perderia lançamento."""
+    _semear(conn)
+    _b3(conn, "2026-07-21", "COMPRA", 1, 68, 9.92)
+    n = nota.parsear(montar(
+        negocio("FII MAXI REN          MXRF11          CI", 10, 9.92),
+        rubricas={"Taxa de liquidação": 0.03}))
+    conf = nota.conferir(conn, n)
+    assert conf.itens[0].situacao == nota.CRIA
+    nota.gravar(conn, conf)
+    (pos,) = razao.carteira(conn)
+    assert pos.quantidade == 78                          # os dois negócios ficam

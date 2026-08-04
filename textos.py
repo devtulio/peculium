@@ -28,6 +28,41 @@ def chave(texto: str) -> str:
     return re.sub(r"\s+", " ", sem_acento).strip().lower()
 
 
+# Formas societárias e qualificações que a mesma corretora escreve de jeitos
+# diferentes em cada documento. Não identificam ninguém: só enfeitam o nome.
+_JURIDICO = (
+    "corretora de cambio titulos e valores mobiliarios",
+    "distribuidora de titulos e valores mobiliarios",
+    "corretora de titulos e valores mobiliarios",
+    "corretora de valores mobiliarios",
+    "cctvm", "ctvm", "dtvm", "cvmc",
+    "s/a", "s.a.", "sa", "ltda", "eireli", "me", "epp",
+)
+
+
+def nome_instituicao(nome: str) -> str:
+    """Chave de identidade de uma corretora, a partir do nome escrito.
+
+    Existe porque a MESMA corretora chega com nomes diferentes em cada
+    documento. Num acervo real apareceram quatro grafias da XP —
+    `XP INVESTIMENTOS CCTVM S/A`, a mesma com ponto final,
+    `XP INVESTIMENTOS` e o nome por extenso — e duas do Inter. Sem esta
+    normalização são seis cadastros onde deviam existir dois, e a posição por
+    instituição fica sem sentido.
+
+    O que sobra é o nome de fantasia: acento, pontuação, caixa e forma
+    societária saem. `BANCO INTER S/A` e `BANCO INTER` viram a mesma coisa;
+    `NU INVESTIMENTOS S.A. - CTVM` vira `nu investimentos`."""
+    limpo = chave(nome).replace("&", " e ")
+    limpo = re.sub(r"[.,/\-]+", " ", limpo)
+    limpo = re.sub(r"\s+", " ", limpo).strip()
+    for termo in _JURIDICO:
+        alvo = re.sub(r"[.,/\-]+", " ", termo)
+        alvo = re.sub(r"\s+", " ", alvo).strip()
+        limpo = re.sub(rf"(?:^|\s){re.escape(alvo)}(?=\s|$)", " ", limpo)
+    return re.sub(r"\s+", " ", limpo).strip()
+
+
 def formato_numerico(amostras) -> str:
     """Decide a convenção decimal de um arquivo inteiro, por amostragem.
 

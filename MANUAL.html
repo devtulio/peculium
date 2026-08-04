@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<title>Manual Operacional — Peculium v0.8.0</title>
+<title>Manual Operacional — Peculium v0.9.0</title>
 <script>
   // antes de pintar, para o manual não piscar branco ao abrir no tema escuro
   document.documentElement.dataset.tema = localStorage.getItem('tema') || 'cera';
@@ -17,7 +17,7 @@
 
   @page {
     size: A4; margin: 20mm 18mm;
-    @top-center { content: "Peculium v0.8.0 — Manual Operacional";
+    @top-center { content: "Peculium v0.9.0 — Manual Operacional";
                   font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
     @bottom-center { content: counter(page) " de " counter(pages);
                      font-family: Georgia, serif; font-size: 9pt; color: #6a5c43; }
@@ -86,7 +86,7 @@
   <div class="wordmark">PEC<span>V</span>LI<span>V</span>M</div>
   <div class="divisa">SVVM · CVIQVE</div>
   <p style="margin:1.4rem 0 0">Manual Operacional</p>
-  <div class="versao">VERSÃO 0.8.0</div>
+  <div class="versao">VERSÃO 0.9.0</div>
 </div>
 
 <nav class="sumario">
@@ -126,7 +126,7 @@ nada a instalar; o programa cria a pasta de dados na primeira abertura.</p>
 </div>
 
 <p>Para conferir um executável recém-baixado antes de confiar nele:</p>
-<pre>"Peculium v0.8.0.exe" --verificar</pre>
+<pre>"Peculium v0.9.0.exe" --verificar</pre>
 <p>Ele não abre janela: apenas confirma que o pacote está íntegro, grava um
 <code>peculium-verificacao.txt</code> ao lado e devolve código de saída zero.</p>
 
@@ -542,6 +542,40 @@ lado do cofre (<code>peculium.pec.1</code> a <code>.3</code>), também cifrados.
   porque ela vazou, apague os backups antigos; do contrário eles seguem abrindo
   com a senha comprometida. A chave de recuperação continua valendo.
 </div>
+
+<h3>Por que a nota e o extrato não se duplicam</h3>
+
+<p>A nota de corretagem e o extrato da B3 descrevem <strong>o mesmo
+negócio</strong>. O programa junta os dois: a quantidade vem do extrato, os
+custos vêm da nota, e o negócio continua sendo um só.</p>
+
+<p>Isso é menos simples do que parece, porque os dois lados não se parecem:</p>
+
+<ul>
+  <li>a <strong>B3 agrupa execuções</strong> que a nota lista separadas — num dia
+    real ela trouxe 68+12 cotas e a nota 1+11+68. O casamento é pelo total do
+    dia, conferindo quantidade e valor;</li>
+  <li>a <strong>nota é do dia da negociação</strong> e o extrato registra a
+    liquidação, dias depois. Na renda fixa há uma janela de tolerância;</li>
+  <li>quando a nota <strong>não traz o código</strong> do papel, o casamento só
+    pode acontecer depois que você informar o ticker.</li>
+</ul>
+
+<div class="aviso">
+  <strong>Se os totais do dia não baterem, o programa não junta.</strong> Aí são
+  negócios diferentes de verdade, e apagar o que veio da B3 perderia lançamento.
+  Você vê os dois na tela de Lançamentos e decide.
+</div>
+
+<h3>Uma corretora, um cadastro</h3>
+
+<p>A mesma corretora aparece com nomes diferentes em cada documento — a XP chega
+como <code>XP INVESTIMENTOS CCTVM S/A</code>, como a mesma com ponto final, como
+<code>XP INVESTIMENTOS</code> e pelo nome societário por extenso. O programa
+reduz o nome ao de fantasia e trata as quatro como uma só.</p>
+
+<p>Cofres criados antes disso tinham a corretora repetida; ao abrir, o programa
+funde os cadastros duplicados e move os lançamentos para o que fica.</p>
 
 <h3>Portabilidade entre corretoras</h3>
 

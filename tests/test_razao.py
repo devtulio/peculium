@@ -182,7 +182,10 @@ def test_venda_em_corretora_sem_saldo_avisa(conn):
     lanc(conn, "2026-07-01", "VENDA", qtd=100, preco=15, inst=2)
     ap = razao.apurar(conn)
     assert ap.vendas[0].resultado == pytest.approx(500)   # a apuração não trava
-    assert "falta a compra que pôs o papel lá" in ap.avisos[0]
+    assert "falta a aquisição que pôs o papel lá" in ap.avisos[0]
+    # o aviso não pode mandar fazer o que o sistema recusa: COMPRA a preço zero
+    # é rejeitada, e papel recebido de presente só entra como BONIFICAÇÃO
+    assert "BONIFICAÇÃO" in ap.avisos[0]
 
 
 def test_venda_apos_portabilidade_mantem_o_custo_de_origem(conn):

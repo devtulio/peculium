@@ -380,19 +380,24 @@ def test_subscricao_orienta_por_subtipo(tmp_path, conn):
         "Credito;08/07/2026;Direitos de Subscrição - Exercido;MXRF12 - MAXI;ALFA;4;-;-",
         "Credito;09/07/2026;Recibo de Subscrição;MXRF13 - MAXI RENDA;ALFA;4;-;-",
         "Credito;14/07/2026;Direito Sobras de Subscrição;MXRF12 - MAXI;ALFA;54;-;-")
+    # sem preço em nenhuma linha: o exercício deste arquivo não traz PU
+    conf = b3.ler(arq, conn)
     # duas linhas caem no mesmo dia e no mesmo papel: a chave é o nº da linha
-    pendentes = {l.n: l for l in b3.ler(arq, conn).por_situacao(b3.PENDENTE)}
-    assert len(pendentes) == 5
+    linhas = {l.n: l for l in conf.linhas}
 
-    recibo = pendentes[5]
+    # o recibo é o único que pede algo — e aqui não há linha de exercício com
+    # preço, então ele fica pendente em vez de virar lançamento
+    (recibo,) = conf.por_situacao(b3.PENDENTE)
     assert (recibo.ticker, recibo.quantidade) == ("MXRF13", 4)
     assert "É ESTA a linha que vira posição" in recibo.motivo
     assert "CONVERSÃO" in recibo.motivo  # o passo seguinte, quando o recibo virar cota
 
-    assert "nada a lançar" in pendentes[2].motivo      # direito
-    assert "nada a lançar" in pendentes[3].motivo      # solicitação
-    assert "linha de recibo" in pendentes[4].motivo    # exercido aponta para o recibo
-    assert "sobras" in pendentes[6].motivo
+    # as demais são informativas: aparecem com o motivo, sem pedir nada
+    assert "nada a lançar" in linhas[2].motivo      # direito
+    assert "nada a lançar" in linhas[3].motivo      # solicitação
+    assert "linha de recibo" in linhas[4].motivo    # exercido aponta para o recibo
+    assert "sobras" in linhas[6].motivo
+    assert {linhas[n].situacao for n in (2, 3, 4, 6)} == {b3.IGNORADA}
 
 
 def test_subscricao_nunca_vira_lancamento(tmp_path, conn):
@@ -406,3 +411,108 @@ def test_subscricao_nunca_vira_lancamento(tmp_path, conn):
     assert conf.novas == 0
     assert b3.gravar(conn, conf) == 0
     assert conn.execute("SELECT count(*) FROM lancamentos").fetchone()[0] == 0
+
+
+# ------------------------------------------------------------------- Tesouro
+
+def test_compra_de_tesouro_nao_e_descartada(tmp_path, conn):
+    """Compra e venda na Movimentação são o outro lado do que vem na Negociação
+    — menos no Tesouro Direto, que não passa pela bolsa e não aparece lá.
+
+    Descartar junto fazia a compra sumir sem aviso: numa carteira real eram
+    R$ 2.079,13 de patrimônio evaporando em silêncio."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;09/07/2026;Compra;Tesouro IPCA+ com Juros Semestrais 2037;"
+        "ALFA;0,5;4.158,25;2.079,13",
+        "Credito;05/01/2026;Compra;PETR4 - PETROLEO;ALFA;100;10,00;1.000,00")
+    conf = b3.ler(arq, conn)
+    (nova,) = conf.por_situacao(b3.NOVA)
+    assert nova.tipo == "COMPRA"
+    assert nova.quantidade == pytest.approx(0.5)
+    assert nova.valor == pytest.approx(2079.13)
+    # a ação continua sendo descartada: essa vem mesmo na Negociação
+    (ignorada,) = conf.por_situacao(b3.IGNORADA)
+    assert "já vem no relatório de Negociação" in ignorada.motivo
+
+
+def test_tesouro_usa_o_mesmo_codigo_do_leitor_de_posicao(tmp_path, conn):
+    """Sem o código derivado, o papel comprado e o papel do retrato da B3 seriam
+    dois ativos diferentes, e a conferência acusaria divergência nos dois."""
+    import importar_posicao
+
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;09/07/2026;Compra;Tesouro IPCA+ com Juros Semestrais 2037;"
+        "ALFA;0,5;4.158,25;2.079,13")
+    (nova,) = b3.ler(arq, conn).por_situacao(b3.NOVA)
+    assert nova.ticker == importar_posicao._ticker_tesouro(
+        "Tesouro IPCA+ com Juros Semestrais 2037")
+    # e a classe sai sozinha: papel do Tesouro não é ambíguo
+    assert b3.classe_provavel(nova.ticker) == ("TESOURO", False)
+
+
+def test_venda_de_tesouro_tambem_entra(tmp_path, conn):
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;20/07/2026;Venda;Tesouro Selic 2029;ALFA;1;15.000,00;15.000,00")
+    (nova,) = b3.ler(arq, conn).por_situacao(b3.NOVA)
+    assert (nova.tipo, nova.ticker) == ("VENDA", "TESOURO-SELIC-2029")
+
+
+# ---------------------------------------------------------------- subscrição
+
+SUB_EXERCIDO = ("Debito;08/07/2026;Direitos de Subscrição - Exercido;"
+                "MXRF12 - MAXI RENDA;ALFA;4;9,64;38,56")
+SUB_RECIBO = ("Credito;09/07/2026;Recibo de Subscrição;"
+              "MXRF13 - MAXI RENDA;ALFA;4;-;-")
+
+
+def test_subscricao_exercida_vira_lancamento_com_o_preco_da_b3(tmp_path, conn):
+    """O preço ESTÁ no arquivo: a linha "Exercido" traz PU e valor da operação.
+
+    O programa mandava lançar à mão dizendo que a B3 não informava o preço —
+    não era verdade, e o custo do papel ficava de fora da carteira."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;26/06/2026;Direito de Subscrição;MXRF12 - MAXI RENDA;ALFA;4;-;-",
+        "Debito;08/07/2026;Solicitação de Subscrição;MXRF12 - MAXI RENDA;ALFA;4;-;-",
+        SUB_EXERCIDO, SUB_RECIBO)
+    conf = b3.ler(arq, conn)
+    (nova,) = conf.por_situacao(b3.NOVA)
+    assert (nova.tipo, nova.ticker, nova.data) == ("SUBSCRICAO", "MXRF13", "2026-07-09")
+    assert (nova.quantidade, nova.preco, nova.valor) == (4, pytest.approx(9.64),
+                                                         pytest.approx(38.56))
+    # as outras quatro são informativas: não pedem nada do usuário
+    assert conf.por_situacao(b3.PENDENTE) == []
+    assert len(conf.por_situacao(b3.IGNORADA)) == 3
+
+
+def test_recibo_sem_o_exercicio_fica_pendente(tmp_path, conn):
+    """Sem a linha que traz o preço não dá para lançar: inventar o custo de uma
+    subscrição é inventar preço médio."""
+    (pendente,) = b3.ler(csv_movimentacao(tmp_path, SUB_RECIBO),
+                         conn).por_situacao(b3.PENDENTE)
+    assert pendente.ticker == "MXRF13"
+    assert "É ESTA a linha que vira posição" in pendente.motivo
+
+
+def test_exercicio_de_outra_quantidade_nao_serve_de_preco(tmp_path, conn):
+    """Duas subscrições no mesmo período: casar pela quantidade evita usar o
+    preço de uma no recibo da outra."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Debito;08/07/2026;Direitos de Subscrição - Exercido;XPTO12 - X;ALFA;9;5,00;45,00",
+        SUB_RECIBO)
+    conf = b3.ler(arq, conn)
+    assert conf.por_situacao(b3.NOVA) == []
+    assert [l.ticker for l in conf.por_situacao(b3.PENDENTE)] == ["MXRF13"]
+
+
+def test_subscricao_entra_na_posicao_pelo_valor_pago(tmp_path, conn):
+    arq = csv_movimentacao(tmp_path, SUB_EXERCIDO, SUB_RECIBO)
+    conf = b3.ler(arq, conn)
+    assert b3.gravar(conn, conf, {"MXRF13": "FII"}) == 1
+    (p,) = razao.carteira(conn)
+    assert (p.ticker, p.quantidade) == ("MXRF13", 4)
+    assert p.custo_total == pytest.approx(38.56)   # não entra a custo zero

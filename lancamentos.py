@@ -77,11 +77,46 @@ def _instituicao_id(conn, instituicao, obrigatoria: bool = True) -> int | None:
                         (instituicao,)).fetchone():
             return instituicao
         raise DadoInvalido(f"instituição {instituicao} não existe")
-    linha = conn.execute("SELECT id FROM instituicoes WHERE upper(nome)=?",
-                         (str(instituicao).strip().upper(),)).fetchone()
-    if linha is None:
+    achado = _por_nome(conn, instituicao)
+    if achado is None:
         raise DadoInvalido(f"instituição {instituicao} não cadastrada")
-    return linha[0]
+    return achado
+
+
+def _por_nome(conn, nome: str) -> int | None:
+    """Casa pelo nome NORMALIZADO, calculado na hora sobre o que está gravado.
+
+    Não depende da coluna `chave` estar preenchida: ela existe para o índice
+    único, não para a busca. Assim uma linha que entrou por fora (migração
+    parcial, SQL direto) continua sendo encontrada."""
+    alvo = textos.nome_instituicao(nome)
+    if not alvo:
+        return None
+    for linha in conn.execute("SELECT id, nome, chave FROM instituicoes"):
+        if (linha["chave"] or textos.nome_instituicao(linha["nome"])) == alvo:
+            return linha["id"]
+    return None
+
+
+def instituicao(conn, nome: str, cnpj: str | None = None) -> int:
+    """Acha ou cria a instituição, casando pelo NOME NORMALIZADO.
+
+    Ponto único de entrada para os importadores. Casar pelo texto cru fazia a
+    mesma corretora virar um cadastro por grafia: num acervo real havia quatro
+    da XP — `XP INVESTIMENTOS CCTVM S/A`, a mesma com ponto final,
+    `XP INVESTIMENTOS` e o nome societário por extenso."""
+    limpo = str(nome or "").strip()
+    if not limpo:
+        raise DadoInvalido("instituição sem nome")
+    chave = textos.nome_instituicao(limpo)
+    achado = _por_nome(conn, limpo)
+    if achado is not None:
+        conn.execute("UPDATE instituicoes SET chave=coalesce(chave, ?),"
+                     " cnpj=coalesce(cnpj, ?) WHERE id=?", (chave, cnpj, achado))
+        return achado
+    return conn.execute(
+        "INSERT INTO instituicoes (nome, chave, cnpj) VALUES (?,?,?)",
+        (limpo, chave, cnpj)).lastrowid
 
 
 def _positivo(valor: float, campo: str) -> float:

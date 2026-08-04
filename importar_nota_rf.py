@@ -287,6 +287,48 @@ def _hash(nota: NotaRF) -> str:
     return hashlib.sha256(crua.encode()).hexdigest()
 
 
+# A nota é do dia da negociação; a Movimentação da B3 registra a liquidação, que
+# cai alguns dias depois. Num caso real foram 18/06 na nota e 22/06 no extrato —
+# exigir data exata fazia o mesmo aporte entrar duas vezes.
+JANELA_LIQUIDACAO = 6
+
+
+def _mesma_aplicacao(conn, nota: "NotaRF", ativo_id: int | None) -> dict | None:
+    """Acha o lançamento da B3 que é esta mesma aplicação, se existir.
+
+    Casa por **quantidade e preço unitário dentro de uma janela de dias** — não
+    pelo código, porque os dois lados nomeiam o papel de jeitos diferentes: a
+    nota da Inter que não traz código utilizável gera um ticker derivado, e a B3
+    chama o mesmo CDB de `CDB726AM6KA`. Sem isso são dois ativos para um papel
+    só, cada um com metade da posição.
+
+    O emissor entra como desempate quando o ativo da B3 já tem título
+    cadastrado: dois CDBs de bancos diferentes, mesmo valor e mesmo dia, não
+    podem ser confundidos."""
+    tipo = "COMPRA" if nota.tipo == APLICACAO else "VENDA"
+    achados = list(conn.execute(
+        "SELECT l.id, l.ativo_id, a.ticker, t.emissor FROM lancamentos l"
+        "  JOIN ativos a ON a.id = l.ativo_id"
+        "  LEFT JOIN rf_titulos t ON t.ativo_id = l.ativo_id"
+        " WHERE l.tipo=? AND a.classe IN ('RF','TESOURO') AND l.nota_id IS NULL"
+        "   AND abs(l.quantidade-?) < 1e-9 AND abs(l.preco-?) < 0.005"
+        "   AND l.estorna_id IS NULL"
+        "   AND abs(julianday(l.data) - julianday(?)) <= ?"
+        "   AND l.id NOT IN (SELECT estorna_id FROM lancamentos"
+        "                    WHERE estorna_id IS NOT NULL)"
+        " ORDER BY abs(julianday(l.data) - julianday(?))",
+        (tipo, nota.quantidade, nota.pu, nota.data, JANELA_LIQUIDACAO, nota.data)))
+    for linha in achados:
+        if linha["ativo_id"] == ativo_id:
+            return dict(linha)
+        if linha["emissor"] and nota.emissor and \
+                textos.nome_instituicao(linha["emissor"]) != \
+                textos.nome_instituicao(nota.emissor):
+            continue
+        return dict(linha)
+    return None
+
+
 def conferir(conn, notas: list[NotaRF]) -> Conferencia:
     conf = Conferencia()
     ja = {r[0] for r in conn.execute(
@@ -299,17 +341,18 @@ def conferir(conn, notas: list[NotaRF]) -> Conferencia:
             conf.itens.append(Item(nota, JA_IMPORTADA, ativo_id, "já importada"))
             continue
 
-        # A Movimentação da B3 também traz a aplicação em renda fixa. Sem esta
-        # checagem, importar os dois lançaria o mesmo aporte duas vezes — o que a
-        # nota acrescenta, nesse caso, são os dados do papel.
-        if ativo_id is not None and conn.execute(
-                "SELECT 1 FROM lancamentos WHERE data=? AND tipo=? AND ativo_id=?"
-                "  AND abs(quantidade-?) < 1e-9 AND abs(preco-?) < 0.005"
-                "  AND estorna_id IS NULL",
-                (nota.data, "COMPRA" if nota.tipo == APLICACAO else "VENDA",
-                 ativo_id, nota.quantidade, nota.pu)).fetchone():
+        # A Movimentação da B3 também traz a aplicação em renda fixa, e é ela
+        # que dá o código oficial do papel. Sem casar os dois, o mesmo CDB entra
+        # duas vezes — uma pelo código da B3 e outra pelo código derivado da
+        # nota — e o aporte é contado em dobro.
+        aplicacao = _mesma_aplicacao(conn, nota, ativo_id)
+        if aplicacao:
+            ativo_id = aplicacao["ativo_id"]
             conf.itens.append(Item(
                 nota, SO_CADASTRO, ativo_id,
+                f"a aplicação já veio da B3 como {aplicacao['ticker']}: a nota "
+                f"acrescenta só os dados do papel"
+                if aplicacao["ticker"] != nota.ticker else
                 "a aplicação já veio da B3: a nota acrescenta só os dados do papel"))
             continue
 
@@ -347,11 +390,9 @@ def gravar(conn, conf: Conferencia, classe: str = "RF") -> dict:
                 "INSERT INTO ativos (ticker, nome, classe) VALUES (?,?,?)",
                 (nota.ticker, nota.nome or None, classe_alvo)).lastrowid
 
-        instituicao = conn.execute("SELECT id FROM instituicoes WHERE upper(nome)=?",
-                                   (nota.corretora.upper(),)).fetchone()
-        if instituicao is None:
-            instituicao = (conn.execute("INSERT INTO instituicoes (nome) VALUES (?)",
-                                        (nota.corretora,)).lastrowid,)
+        import lancamentos
+
+        instituicao = (lancamentos.instituicao(conn, nota.corretora),)
 
         if item.situacao == CRIA:
             conn.execute(

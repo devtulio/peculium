@@ -3,6 +3,53 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.9.0] — 2026-08-03
+
+### Corrigido — o motor de importação montava a carteira errada
+
+Oito defeitos achados conferindo o acervo completo de um usuário — dez notas de
+corretagem e os relatórios da B3 do ano inteiro — contra a posição que a própria
+corretora informa. A carteira saía com **R$ 12.689,33** onde o certo eram
+**R$ 9.630,65**.
+
+- **A nota duplicava o negócio na primeira vez que via um papel.** A
+  reconciliação com a B3 rodava antes de o usuário informar o ticker, e sem
+  ticker não há como casar: o negócio entrava de novo por cima do que veio da
+  B3. KLBN4 ficava com 570 onde a corretora dizia 285. Da segunda nota em diante
+  o apelido já existia e reconciliava certo, o que escondia o problema. Agora a
+  reconciliação acontece **depois** de o ticker ser resolvido.
+- **A B3 agrupa execuções que a nota detalha.** Num dia real ela trouxe 68+12 e
+  a nota 1+11+68; casar linha a linha não fecha nunca. Agora casa pelo
+  **agregado do dia**, conferindo quantidade **e** valor — só a quantidade
+  colaria a nota no negócio errado quando há duas ordens do mesmo papel no dia.
+- **A data da nota não é a data da B3 na renda fixa.** A nota é do dia da
+  negociação e o extrato registra a liquidação: 18/06 contra 22/06 num caso
+  real, e o mesmo aporte entrava duas vezes. Entrou uma janela de seis dias.
+- **O mesmo CDB virava dois ativos.** A nota da Inter que não traz código
+  utilizável gera um ticker derivado; a B3 chama o papel pelo código dela. Agora
+  casam por quantidade, preço unitário e emissor.
+- **A compra de Tesouro Direto era descartada em silêncio.** O importador jogava
+  fora toda linha "Compra" da Movimentação dizendo que ela já vinha na
+  Negociação — e o Tesouro **não** passa pela bolsa, então não vem. Eram
+  R$ 2.079,13 sumindo sem aviso nenhum.
+- **O preço da subscrição era jogado fora.** A linha "Direitos de Subscrição -
+  Exercido" traz preço unitário e valor, e o programa dizia ao usuário que a B3
+  não informava o preço. A subscrição exercida agora vira lançamento sozinha.
+- **Os avisos mandavam fazer o que o sistema recusa.** Papel recebido sem
+  pagamento (presente, promoção) não pode entrar como COMPRA, que exige preço
+  maior que zero. Os avisos passaram a apontar BONIFICAÇÃO.
+- **A mesma corretora virava um cadastro por grafia.** Num acervo real havia
+  quatro da XP — `XP INVESTIMENTOS CCTVM S/A`, a mesma com ponto final,
+  `XP INVESTIMENTOS` e o nome societário por extenso — e duas do Inter: seis
+  cadastros para três corretoras. Agora o nome é normalizado (sem acento,
+  pontuação nem forma societária) e vira chave única.
+
+### Esquema
+
+- Versão 4: coluna `chave` em `instituicoes`, com índice único. A migração
+  **funde** as duplicadas de cofres antigos, repontando os lançamentos antes de
+  apagar a cópia — e preserva o CNPJ que só existir na que vai sumir.
+
 ## [0.8.0] — 2026-08-03
 
 ### Mudado — painel redesenhado

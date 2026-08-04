@@ -210,3 +210,68 @@ def test_a_corretora_vira_instituicao_uma_vez(conn):
     rf.gravar(conn, rf.conferir(conn, rf.parsear(INTER)))
     assert conn.execute("SELECT count(*) FROM instituicoes").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM rf_titulos").fetchone()[0] == 2
+
+
+# ------------------- casamento com a Movimentação da B3: os dois que dobravam
+
+def _aplicacao_b3(conn, ticker, data, quantidade, pu, emissor=None):
+    """A mesma aplicação como ela chega pelo extrato da B3: com o código oficial
+    do papel, e na data da LIQUIDAÇÃO."""
+    ativo_id = conn.execute(
+        "INSERT INTO ativos (ticker, classe) VALUES (?,'RF')", (ticker,)).lastrowid
+    if emissor:
+        conn.execute("INSERT INTO rf_titulos (ativo_id, emissao, indexador, taxa,"
+                     " pu_base, emissor) VALUES (?,?,'CDI',100,?,?)",
+                     (ativo_id, data, pu, emissor))
+    conn.execute(
+        "INSERT INTO lancamentos (data, tipo, ativo_id, instituicao_id, quantidade,"
+        " preco, valor, origem, criado_em) VALUES (?,'COMPRA',?,1,?,?,?,"
+        "'B3_MOVIMENTACAO','2026-01-01')",
+        (data, ativo_id, quantidade, pu, round(quantidade * pu, 2)))
+    return ativo_id
+
+
+def test_nota_e_extrato_com_dias_diferentes_nao_duplicam(conn):
+    """A nota é do dia da negociação; a B3 registra a liquidação, dias depois.
+
+    Num caso real foram 18/06 na nota e 22/06 no extrato. Exigir data exata
+    fazia o mesmo aporte entrar duas vezes — 900 unidades onde havia 450."""
+    _aplicacao_b3(conn, "CDB626BO9OA", "2026-06-22", 450, 0.01)
+    conf = rf.conferir(conn, rf.parsear(INTER))
+    (item,) = conf.itens
+    assert item.situacao == rf.SO_CADASTRO
+    rf.gravar(conn, conf)
+    (pos,) = razao.carteira(conn)
+    assert (pos.ticker, pos.quantidade) == ("CDB626BO9OA", 450)
+
+
+def test_papel_com_codigo_diferente_dos_dois_lados_e_o_mesmo(conn):
+    """A nota da Inter que não traz código utilizável gera um ticker derivado; a
+    B3 chama o mesmo CDB pelo código dela. Sem casar os dois, são dois ativos
+    para um papel só, cada um com metade da posição."""
+    # a nota é de 18/06; a B3 registra a liquidação em 22/06
+    ativo_id = _aplicacao_b3(conn, "CDB726AM6KA", "2026-06-22", 450, 0.01)
+    conf = rf.conferir(conn, rf.parsear(INTER_CODIGO_RUIM))
+    (item,) = conf.itens
+    assert item.situacao == rf.SO_CADASTRO
+    assert item.ativo_id == ativo_id            # aponta para o ativo da B3
+    rf.gravar(conn, conf)
+    assert conn.execute("SELECT count(*) FROM ativos").fetchone()[0] == 1
+    (pos,) = razao.carteira(conn)
+    assert (pos.ticker, pos.quantidade) == ("CDB726AM6KA", 450)
+
+
+def test_fora_da_janela_de_liquidacao_nao_casa(conn):
+    """Um mês de diferença não é atraso de liquidação: é outra aplicação."""
+    _aplicacao_b3(conn, "CDB726AM6KA", "2026-08-20", 450, 0.01)
+    (item,) = rf.conferir(conn, rf.parsear(INTER_CODIGO_RUIM)).itens
+    assert item.situacao == rf.CRIA
+
+
+def test_emissor_diferente_nao_casa(conn):
+    """Dois CDBs de bancos diferentes, mesmo valor e mesmo dia, não podem ser
+    confundidos só porque a quantidade e o PU batem."""
+    _aplicacao_b3(conn, "CDB999XYZ", "2026-06-22", 450, 0.01,
+                  emissor="BANCO OUTRO S.A.")
+    (item,) = rf.conferir(conn, rf.parsear(INTER_CODIGO_RUIM)).itens
+    assert item.situacao == rf.CRIA

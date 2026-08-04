@@ -75,6 +75,14 @@ IGNORAR = {
     "emprestimo": "aluguel de ativos está fora do escopo da v1",
 }
 
+def _e_tesouro(produto: str) -> bool:
+    """Tesouro Direto não passa pela bolsa: nada dele vem no relatório de
+    Negociação, e a Movimentação é a única fonte da compra."""
+    return _chave(produto).startswith("tesouro ")
+
+
+EPS = 1e-9
+
 SUFIXO_BDR = ("31", "32", "33", "34", "35", "39")
 SUFIXO_ACAO = ("3", "4", "5", "6", "7", "8")
 
@@ -196,6 +204,8 @@ def classe_provavel(ticker: str) -> tuple[str, bool]:
 
     O sufixo 11 é ambíguo — FII, ETF e unit dividem o mesmo número — e a diferença
     muda a alíquota do IR. Nunca decidir sozinho nesse caso."""
+    if ticker.upper().startswith("TESOURO-"):
+        return "TESOURO", False     # código derivado do próprio nome do papel
     if _CODIGO_RF.fullmatch(ticker.upper()) and not re.search(r"\d+$", ticker):
         return "RF", False          # código de papel de renda fixa: CDB726AWP4H
     sufixo = re.search(r"(\d+)$", ticker)
@@ -314,6 +324,69 @@ def _motivo_subscricao(movimento: str) -> str:
             "converter")
 
 
+def _ler_subscricoes(coletadas: list[tuple[int, dict, str]], conf: Conferencia,
+                     formato: str) -> None:
+    """A subscrição anda em papéis intermediários, mas **o preço está lá**.
+
+    A linha "Direitos de Subscrição - Exercido" traz preço unitário e valor da
+    operação; é o que o subscritor pagou. O recibo (`…13`) é o que entra na
+    carteira. Com os dois, o lançamento sai sozinho — antes o programa mandava
+    lançar à mão dizendo que a B3 não informava o preço, o que **não era
+    verdade**.
+
+    Sem o par (exercício sem recibo, ou recibo sem exercício) a linha continua
+    pendente: inventar o custo de uma subscrição é inventar preço médio."""
+    exercidos: dict[str, dict] = {}
+    for _i, linha, movimento in coletadas:
+        if not movimento.startswith("direitos de subscricao - exercido"):
+            continue
+        preco = _numero(linha.get("preco unitario"), formato)
+        valor = _numero(linha.get("valor da operacao"), formato)
+        if preco or valor:
+            exercidos[_data(linha["data"])] = {
+                "preco": preco, "valor": valor,
+                "quantidade": _numero(linha.get("quantidade"), formato),
+                "instituicao": str(linha.get("instituicao") or "").strip()}
+
+    vistos: dict[str, int] = {}
+    for i, linha, movimento in coletadas:
+        ticker, nome = _ticker(linha.get("produto", ""))
+        data = _data(linha["data"]) if linha.get("data") else ""
+        quantidade = _numero(linha.get("quantidade"), formato)
+        if not movimento.startswith("recibo de subscricao"):
+            # direito, sobra, solicitação e exercício não têm efeito em
+            # posição: são informativos, e marcá-los como pendentes enchia a
+            # conferência de linhas que não pedem nada — cinco das seis de uma
+            # subscrição real
+            conf.linhas.append(Linha(
+                i, IGNORADA, ticker=ticker, data=data, quantidade=quantidade,
+                motivo=_motivo_subscricao(movimento)))
+            continue
+
+        # o exercício é do dia anterior ou do mesmo dia: procura para trás
+        pago = next((exercidos[d] for d in sorted(exercidos, reverse=True)
+                     if d <= data and abs(exercidos[d]["quantidade"] - quantidade) < EPS),
+                    None)
+        if pago is None:
+            conf.linhas.append(Linha(
+                i, PENDENTE, ticker=ticker, data=data, quantidade=quantidade,
+                motivo=_motivo_subscricao(movimento)))
+            continue
+        preco = pago["preco"] or (pago["valor"] / quantidade if quantidade else 0.0)
+        valor = pago["valor"] or round(quantidade * preco, 2)
+        campos = ("subscricao", data, ticker, pago["instituicao"],
+                  f"{quantidade:.8f}", f"{valor:.2f}")
+        chave = "|".join(campos)
+        vistos[chave] = vistos.get(chave, -1) + 1
+        conf.linhas.append(Linha(
+            i, NOVA, "SUBSCRICAO", data, ticker, pago["instituicao"], quantidade,
+            preco, valor, _hash(MOVIMENTACAO, campos, vistos[chave]),
+            motivo=(f"recibo de subscrição, com o preço que a linha de exercício "
+                    f"informou. Quando o recibo virar a cota definitiva, registre "
+                    f"uma CONVERSÃO em Eventos"),
+            nome_ativo=nome))
+
+
 def _parear_transferencias(coletadas: list[tuple[int, dict]], conf: Conferencia,
                            formato: str) -> None:
     """A portabilidade vem em duas linhas: débito na origem, crédito no destino.
@@ -364,7 +437,9 @@ def _parear_transferencias(coletadas: list[tuple[int, dict]], conf: Conferencia,
                     f"{'de destino' if saida else 'de origem'}. Lance à mão para "
                     f"preservar o custo — e note que transferência move posição, "
                     f"não cria: se o papel veio de corretora que o Peculium nunca "
-                    f"viu, o que falta é a compra original")))
+                    f"viu, o que falta é a aquisição original. Se você não pagou "
+                    f"nada por ele (presente, promoção), lance como BONIFICAÇÃO "
+                    f"com valor zero — COMPRA recusa preço zero")))
 
 
 def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> None:
@@ -372,9 +447,17 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> No
                      "instituicao", "quantidade"), "Movimentação")
     vistos: dict[str, int] = {}
     transferencias: list[tuple[int, dict]] = []
+    subscricoes: list[tuple[int, dict, str]] = []
     for i, linha in enumerate(tabela, start=2):
         movimento = _chave(str(linha.get("movimentacao") or ""))
-        if movimento in IGNORAR:
+        # "Compra"/"Venda" na Movimentação são o outro lado do que vem na
+        # Negociação — MENOS no Tesouro Direto, que não é negociado em bolsa e
+        # por isso não aparece lá. Descartar essas linhas junto com as outras
+        # fazia a compra do Tesouro sumir sem aviso nenhum: numa carteira real
+        # eram R$ 2.079,13 de patrimônio evaporando em silêncio.
+        if movimento in IGNORAR and not (
+                movimento in ("compra", "venda")
+                and _e_tesouro(str(linha.get("produto") or ""))):
             conf.linhas.append(Linha(i, IGNORADA, motivo=IGNORAR[movimento]))
             continue
         if movimento.startswith("transferencia"):
@@ -385,29 +468,33 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> No
             transferencias.append((i, linha))
             continue
         if SUBSCRICAO in movimento:
-            conf.linhas.append(Linha(
-                i, PENDENTE, ticker=_ticker(linha.get("produto", ""))[0],
-                data=_data(linha["data"]) if linha.get("data") else "",
-                quantidade=_numero(linha.get("quantidade"), formato),
-                motivo=_motivo_subscricao(movimento)))
+            subscricoes.append((i, linha, movimento))
             continue
 
         entrada = _chave(str(linha.get("entrada/saida") or "")).startswith("cred")
         renda_fixa = any(movimento.startswith(m) for m in RF_MOVIMENTOS)
-        tipo = ("COMPRA" if entrada else "VENDA") if renda_fixa else TIPOS.get(movimento)
+        tesouro = movimento in ("compra", "venda")
+        tipo = ("COMPRA" if entrada else "VENDA") if (renda_fixa or tesouro)             else TIPOS.get(movimento)
         if tipo is None:
             conf.linhas.append(Linha(i, ERRO, motivo=f"movimentação desconhecida: "
                                                      f"{linha.get('movimentacao')!r}"))
             continue
         try:
             data = _data(linha["data"])
-            ticker, nome = (_ticker_rf(linha["produto"]) if renda_fixa
-                            else _ticker(linha["produto"]))
+            if tesouro:
+                # mesmo código derivado do leitor de posição: sem isto o papel
+                # comprado e o papel do retrato seriam dois ativos diferentes
+                import importar_posicao
+                nome = str(linha["produto"]).strip()
+                ticker = importar_posicao._ticker_tesouro(nome)
+            else:
+                ticker, nome = (_ticker_rf(linha["produto"]) if renda_fixa
+                                else _ticker(linha["produto"]))
             qtd = _numero(linha["quantidade"], formato)
         except (ValueError, KeyError) as e:
             conf.linhas.append(Linha(i, ERRO, motivo=str(e)))
             continue
-        if renda_fixa and not ticker:
+        if (renda_fixa or tesouro) and not ticker:
             conf.linhas.append(Linha(
                 i, ERRO, motivo=f"título de renda fixa sem código identificável em "
                                 f"{linha.get('produto')!r}"))
@@ -423,8 +510,9 @@ def _ler_movimentacao(tabela: list[dict], conf: Conferencia, formato: str) -> No
             _hash(MOVIMENTACAO, campos, vistos[chave]), nome_ativo=nome))
 
     # depois do arquivo inteiro lido: só aí se sabe se as duas pontas de cada
-    # portabilidade estão presentes
+    # portabilidade estão presentes, e se a subscrição tem preço em alguma linha
     _parear_transferencias(transferencias, conf, formato)
+    _ler_subscricoes(subscricoes, conf, formato)
     conf.linhas.sort(key=lambda l: l.n)
 
 
@@ -442,7 +530,7 @@ def ler(caminho: str | Path, conn) -> Conferencia:
     ja_no_banco = {r[0] for r in conn.execute(
         "SELECT hash_origem FROM lancamentos WHERE hash_origem IS NOT NULL")}
     conhecidos = {r[0].upper() for r in conn.execute("SELECT ticker FROM ativos")}
-    instituicoes = {str(r[0]).strip().lower()
+    instituicoes = {textos.nome_instituicao(r["nome"])
                     for r in conn.execute("SELECT nome FROM instituicoes")}
     for l in conf.linhas:
         if l.situacao != NOVA:
@@ -456,8 +544,13 @@ def ler(caminho: str | Path, conn) -> Conferencia:
             conf.ativos_novos[l.ticker] = {"nome": l.nome_ativo, "classe": classe,
                                            "confirmar": confirmar}
         for nome_inst in (l.instituicao, l.destino):
-            if nome_inst and nome_inst.lower() not in instituicoes and \
-                    nome_inst not in conf.instituicoes_novas:
+            # a mesma corretora chega com grafias diferentes no MESMO
+            # arquivo: comparar pelo texto cru criava um cadastro por
+            # grafia — quatro da XP num extrato real
+            chave = textos.nome_instituicao(nome_inst) if nome_inst else ""
+            if chave and chave not in instituicoes and chave not in {
+                    textos.nome_instituicao(n)
+                    for n in conf.instituicoes_novas}:
                 conf.instituicoes_novas.append(nome_inst)
     if any(a["confirmar"] for a in conf.ativos_novos.values()):
         conf.avisos.append(
@@ -490,11 +583,13 @@ def gravar(conn, conf: Conferencia, classes: dict[str, str] | None = None) -> in
     for ticker, dados in conf.ativos_novos.items():
         conn.execute("INSERT OR IGNORE INTO ativos (ticker, nome, classe) VALUES (?,?,?)",
                      (ticker, dados["nome"] or None, classes.get(ticker) or dados["classe"]))
+    import lancamentos
+
     for nome in conf.instituicoes_novas:
-        conn.execute("INSERT INTO instituicoes (nome) VALUES (?)", (nome,))
+        lancamentos.instituicao(conn, nome)
 
     ativos = {r[0].upper(): r[1] for r in conn.execute("SELECT ticker, id FROM ativos")}
-    instituicoes = {str(r[0]).strip().lower(): r[1]
+    instituicoes = {textos.nome_instituicao(r["nome"]): r["id"]
                     for r in conn.execute("SELECT nome, id FROM instituicoes")}
     origem = f"B3_{conf.relatorio}"
     gravadas = 0
@@ -504,8 +599,9 @@ def gravar(conn, conf: Conferencia, classes: dict[str, str] | None = None) -> in
             " instituicao_destino_id, quantidade, preco, valor, origem, hash_origem,"
             " importacao_id, criado_em) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (l.data, l.tipo, ativos.get(l.ticker),
-             instituicoes.get(l.instituicao.lower()),
-             instituicoes.get(l.destino.lower()) if l.destino else None,
+             instituicoes.get(textos.nome_instituicao(l.instituicao)),
+             instituicoes.get(textos.nome_instituicao(l.destino))
+             if l.destino else None,
              l.quantidade, l.preco, l.valor, origem, l.hash, importacao_id, agora))
         gravadas += cur.rowcount
     return gravadas

@@ -5,7 +5,7 @@ O banco vive dentro do cofre cifrado; este módulo só descreve a forma dele.
 """
 import sqlite3
 
-VERSAO = 3
+VERSAO = 4
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS config (
@@ -13,12 +13,18 @@ CREATE TABLE IF NOT EXISTS config (
     valor TEXT
 );
 
+-- `chave` é o nome sem acento, pontuação nem forma societária: é o que impede a
+-- mesma corretora de virar quatro cadastros porque cada documento a escreve de
+-- um jeito. Ela é UNIQUE; o `nome` continua sendo o que se mostra na tela.
 CREATE TABLE IF NOT EXISTS instituicoes (
     id     INTEGER PRIMARY KEY,
     nome   TEXT NOT NULL,
+    chave  TEXT,
     cnpj   TEXT,
     ativo  INTEGER NOT NULL DEFAULT 1
 );
+CREATE UNIQUE INDEX IF NOT EXISTS ix_inst_chave ON instituicoes(chave)
+    WHERE chave IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS ativos (
     id       INTEGER PRIMARY KEY,
@@ -199,11 +205,49 @@ def _migrar_2(conn: sqlite3.Connection) -> None:
     conn.executescript(ESQUEMA)
 
 
+def _migrar_4(conn: sqlite3.Connection) -> None:
+    """Preenche a chave das instituições e FUNDE as duplicadas.
+
+    Cofre feito antes desta versão tem a mesma corretora repetida — quatro
+    grafias da XP num acervo real. Funde-se para a de menor id (a primeira
+    vista), e os lançamentos das outras são repontados antes de elas sumirem:
+    apagar primeiro deixaria lançamento órfão."""
+    import textos
+
+    if "chave" not in {c[1] for c in conn.execute("PRAGMA table_info(instituicoes)")}:
+        conn.execute("ALTER TABLE instituicoes ADD COLUMN chave TEXT")
+
+    por_chave: dict[str, int] = {}
+    for linha in conn.execute("SELECT id, nome FROM instituicoes ORDER BY id"):
+        chave = textos.nome_instituicao(linha["nome"])
+        if not chave:
+            continue
+        if chave in por_chave:
+            manter = por_chave[chave]
+            conn.execute("UPDATE lancamentos SET instituicao_id=? WHERE instituicao_id=?",
+                         (manter, linha["id"]))
+            conn.execute("UPDATE lancamentos SET instituicao_destino_id=?"
+                         " WHERE instituicao_destino_id=?", (manter, linha["id"]))
+            # o CNPJ pode ter vindo só na cópia que vai sumir
+            conn.execute(
+                "UPDATE instituicoes SET cnpj=coalesce(cnpj,"
+                " (SELECT cnpj FROM instituicoes WHERE id=?)) WHERE id=?",
+                (linha["id"], manter))
+            conn.execute("DELETE FROM instituicoes WHERE id=?", (linha["id"],))
+        else:
+            por_chave[chave] = linha["id"]
+            conn.execute("UPDATE instituicoes SET chave=? WHERE id=?",
+                         (chave, linha["id"]))
+    conn.executescript(ESQUEMA)          # o índice único só entra depois da fusão
+
+
 def aplicar(conn: sqlite3.Connection) -> None:
     atual = versao_do_banco(conn)
     conn.executescript(ESQUEMA)
     if atual and atual < 2:
         _migrar_2(conn)
+    if atual and atual < 4:
+        _migrar_4(conn)
     conn.execute("INSERT OR REPLACE INTO config (chave, valor) VALUES ('esquema', ?)",
                  (str(VERSAO),))
 

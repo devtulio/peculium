@@ -32,7 +32,7 @@ import renda_fixa
 import series
 import textos
 
-VERSAO = "0.8.0"
+VERSAO = "0.9.0"
 
 
 def raiz() -> Path:
@@ -457,9 +457,8 @@ class Api:
         nome = str(dados.get("nome", "")).strip()
         if not nome:
             raise ValueError("nome é obrigatório")
-        identificador = self._conn.execute(
-            "INSERT INTO instituicoes (nome, cnpj) VALUES (?,?)",
-            (nome, self._cnpj_ou_erro(dados.get("cnpj")))).lastrowid
+        identificador = lancamentos.instituicao(
+            self._conn, nome, self._cnpj_ou_erro(dados.get("cnpj")))
         lancamentos.auditar(self._conn, "INSTITUICAO", f"#{identificador} {nome}")
         self._gravar()
         return {"id": identificador}
@@ -505,8 +504,9 @@ class Api:
         documento = self._cnpj_ou_erro(dados.get("cnpj", atual["cnpj"]))
         ativo = int(bool(dados.get("ativo", atual["ativo"])))
         self._conn.execute(
-            "UPDATE instituicoes SET nome=?, cnpj=?, ativo=? WHERE id=?",
-            (nome, documento, ativo, int(identificador)))
+            "UPDATE instituicoes SET nome=?, chave=?, cnpj=?, ativo=? WHERE id=?",
+            (nome, textos.nome_instituicao(nome), documento, ativo,
+             int(identificador)))
         lancamentos.auditar(self._conn, "INSTITUICAO_EDITADA",
                             f"#{identificador} {atual['nome']} → {nome}")
         self._gravar()

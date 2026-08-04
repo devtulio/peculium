@@ -129,8 +129,10 @@ def _mover(ap: Apuracao, ativo_id: int, instituicao_id: int | None, qtd: float,
     if saldo < -EPS:
         ap.avisos.append(
             f"{data_br(data)}: {ticker or ativo_id} fica com saldo negativo "
-            f"({saldo:g}) na instituição {instituicao_id} — falta a compra que "
-            f"pôs o papel lá, ou uma transferência de entrada")
+            f"({saldo:g}) na instituição {instituicao_id} — falta a aquisição "
+            f"que pôs o papel lá, ou uma transferência de entrada. Papel "
+            f"recebido sem pagar (presente, promoção) se lança como "
+            f"BONIFICAÇÃO: COMPRA recusa preço zero")
     ap.por_instituicao[chave] = saldo
     if abs(saldo) < EPS:
         del ap.por_instituicao[chave]

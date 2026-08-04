@@ -198,3 +198,18 @@ def test_toda_gravacao_deixa_rastro(conn):
     assert acoes == ["EVENTO", "ESTORNAR", "LANCAR"]     # mais recente primeiro
     assert "engano" in lanc.historico(conn)[1]["detalhe"]
     assert "05/01/2026" in lanc.historico(conn)[2]["detalhe"]   # data em BR
+
+
+def test_aquisicao_sem_custo_entra_como_bonificacao(conn):
+    """Papel recebido de presente existe: um BDR que o banco deu de brinde.
+
+    COMPRA recusa preço zero — e recusa com razão, porque compra a zero quase
+    sempre é dedo errado. O caminho é BONIFICAÇÃO, e é o que os avisos apontam."""
+    with pytest.raises(lanc.DadoInvalido, match="maior que zero"):
+        lanc.lancar(conn, data="2026-05-27", tipo="COMPRA", ativo=1,
+                    instituicao=1, quantidade=1, preco=0)
+
+    lanc.lancar(conn, data="2026-05-27", tipo="BONIFICACAO", ativo=1,
+                instituicao=1, quantidade=1, valor=0)
+    (p,) = razao.carteira(conn)
+    assert (p.quantidade, p.custo_total, p.preco_medio) == (1, 0.0, 0.0)
