@@ -28,6 +28,12 @@ const esc = t => String(t ?? '').replace(/[&<>"]/g,
 
 let ESTADO = { config: {}, cadastros: null };
 
+/* Lista única. Havia três cópias, e DUAS estavam sem RF e TESOURO: o <select>
+   caía na primeira opção — ACAO — e era isso que ia para o banco. Todo CDB e o
+   Tesouro entravam como ação, e a reconciliação da renda fixa parava de achar
+   o lançamento da B3, duplicando o aporte. */
+const CLASSES_ATIVO = ['ACAO', 'FII', 'ETF', 'BDR', 'UNIT', 'RF', 'TESOURO'];
+
 /* ── ponte ─────────────────────────────────────────────────────────────── */
 
 async function api(metodo, ...args) {
@@ -789,7 +795,7 @@ function conferirB3(c) {
         ([ticker, a]) => `<div class="campo"><label for="c-${ticker}">${esc(ticker)}
           ${a.confirmar ? ' — confirme a classe' : ''}</label>
           <select id="c-${ticker}" data-classe="${esc(ticker)}">
-            ${['ACAO', 'FII', 'ETF', 'BDR', 'UNIT'].map(k =>
+            ${CLASSES_ATIVO.map(k =>
               `<option value="${k}"${k === a.classe ? ' selected' : ''}>${k}</option>`
             ).join('')}</select></div>`).join('')}</div>` : ''}
       ${listaAvisos(c.avisos)}
@@ -832,7 +838,7 @@ function conferirNota(c) {
               value="${esc(i.ticker)}" placeholder="ex.: KLBN4"></div>
           <div class="campo"><label for="k-${n}">Classe</label>
             <select id="k-${n}" data-espec-classe="${esc(i.especificacao)}">
-              ${['ACAO', 'FII', 'ETF', 'BDR', 'UNIT'].map(k =>
+              ${CLASSES_ATIVO.map(k =>
                 `<option value="${k}">${k}</option>`).join('')}</select></div>`).join('')}
         </div>` : ''}
       ${listaAvisos(c.avisos)}
@@ -1130,8 +1136,6 @@ async function verConfig() {
     });
   });
 }
-
-const CLASSES_ATIVO = ['ACAO', 'FII', 'ETF', 'BDR', 'UNIT', 'RF', 'TESOURO'];
 
 function formAtivo(a) {
   modal(a ? `Editar ${a.ticker}` : 'Novo ativo', `

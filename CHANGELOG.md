@@ -3,6 +3,29 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/);
 versionamento [semântico](https://semver.org/lang/pt-BR/).
 
+## [0.9.3] — 2026-08-03
+
+### Corrigido — todo CDB e o Tesouro entravam como AÇÃO
+
+Um defeito só, com dois sintomas.
+
+- **A lista de classes da tela estava incompleta.** Havia três cópias dela no
+  JavaScript, e **duas não tinham RF nem TESOURO**. Quando a classe real não
+  está entre as opções, o `<select>` cai na primeira — `ACAO` — e é esse valor
+  que vai para o banco. Todo CDB e o Tesouro Direto entravam classificados como
+  ação. Agora existe **uma** lista, e ela tem as sete classes.
+- **A duplicação da renda fixa era consequência disso.** A reconciliação da
+  nota com o extrato filtra por classe; com o CDB marcado como ação, ela deixava
+  de achar o lançamento da B3 e criava outro. O aporte entrava duas vezes.
+- **A tela deixou de poder reclassificar o que o programa sabe.** A escolha da
+  interface só vale onde a confirmação foi pedida — um código que começa com CDB
+  é renda fixa e ponto. Um defeito de tela não pode corromper o razão.
+
+### Testes
+
+- A tela de conferência do extrato da B3 **não tinha nenhum teste de interface**,
+  e é por isso que nada pegou. Agora tem quatro.
+
 ## [0.9.2] — 2026-08-03
 
 ### Corrigido — cofre da versão anterior não migrava, e a importação falhava

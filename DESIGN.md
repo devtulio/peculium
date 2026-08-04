@@ -733,6 +733,24 @@ cada abertura, senão lançar a compra que faltava não apagaria o aviso.
 contrasta, e as séries precisam ser distinguíveis **entre si**, não só do fundo:
 lá elas viram âmbar, rosa e azul.
 
+## 10.3 Listas que existem nos dois lados
+
+Toda lista de domínio replicada no JavaScript é uma cópia que vai divergir. A
+das **classes de ativo** divergiu: existiam três, duas sem `RF` e `TESOURO`. O
+`<select>` cai na primeira opção quando o valor real não está entre elas, então
+todo CDB e o Tesouro entravam como **ação** — e, como a reconciliação da renda
+fixa filtra por classe, o aporte ainda era duplicado por tabela.
+
+Duas defesas, e a segunda é a que importa:
+
+**Uma lista só**, no topo do `app.js`. Barata, e resolve o caso conhecido.
+
+**O Python ignora a escolha da tela onde ele tem certeza.** `gravar()` só aceita
+override de classe para os tickers em que pediu confirmação. Um código que
+começa com `CDB` é renda fixa e ponto. Defeito de tela não pode corromper o
+razão — e essa defesa vale para a próxima lista que divergir, que ainda não
+sabemos qual é.
+
 ## 10.1 Datas: guarda ISO, mostra BR
 
 O banco guarda **sempre** `AAAA-MM-DD` (e competência como `AAAA-MM`): ordenação,

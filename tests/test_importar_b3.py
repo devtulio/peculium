@@ -531,3 +531,29 @@ def test_codigo_de_renda_fixa_dispensa_confirmacao(ticker):
 def test_sufixo_11_continua_pedindo_confirmacao():
     """A contraprova: 11 é FII, ETF ou unit, e a classe muda a alíquota."""
     assert b3.classe_provavel("SNAG11") == ("FII", True)
+
+
+def test_tela_nao_pode_reclassificar_o_que_o_programa_tem_certeza(tmp_path, conn):
+    """Uma lista de opções incompleta na interface fez todo CDB e o Tesouro
+    entrarem como AÇÃO — e a reconciliação da renda fixa, que filtra por classe,
+    parou de achar o lançamento da B3 e duplicou os aportes.
+
+    Um defeito de tela não pode corromper o razão: a escolha da tela só vale
+    onde o programa pediu confirmação."""
+    arq = csv_movimentacao(
+        tmp_path,
+        "Credito;16/07/2026;Aplicação;CDB - CDB726AM6KA - BANCO;ALFA;50000;0,01;500,00",
+        "Credito;09/07/2026;Compra;Tesouro IPCA+ com Juros Semestrais 2037;"
+        "ALFA;0,5;4.158,25;2.079,13",
+        "Credito;20/03/2026;Rendimento;MXRF11 - MAXI RENDA;ALFA;200;0,10;20,00")
+    conf = b3.ler(arq, conn)
+    # a tela manda ACAO para os três; só o ambíguo pode ser aceito
+    b3.gravar(conn, conf, {"CDB726AM6KA": "ACAO",
+                           "TESOURO-IPCA-JUROS-2037": "ACAO",
+                           "MXRF11": "ACAO"})
+    classes = {r["ticker"]: r["classe"] for r in conn.execute(
+        "SELECT ticker, classe FROM ativos")}
+    assert classes["CDB726AM6KA"] == "RF"
+    assert classes["TESOURO-IPCA-JUROS-2037"] == "TESOURO"
+    # o sufixo 11 é genuinamente ambíguo: aí a tela decide
+    assert classes["MXRF11"] == "ACAO"

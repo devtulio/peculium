@@ -142,6 +142,47 @@ test.describe('importação', () => {
   });
 });
 
+test.describe('conferência do extrato da B3', () => {
+  async function abrir(page) {
+    await page.goto('/index.html?mock=1&b3=1&tema=atrium');
+    await page.fill('#senha', 'mock');
+    await page.click('#form-abrir button[type="submit"]');
+    await page.click('#menu button[data-view="importar"]');
+    await page.click('#btn-escolher');
+    await expect(page.locator('#conferencia')).toContainText('Conferência');
+  }
+
+  test('a lista de classes inclui renda fixa e Tesouro', async ({ page }) => {
+    // A regressão: duas listas no JS estavam sem RF e TESOURO. O <select> caía
+    // na primeira opção — ACAO — e todo CDB entrava como ação, o que ainda
+    // quebrava a reconciliação da renda fixa e duplicava os aportes.
+    await abrir(page);
+    const opcoes = page.locator('#c-CDB726AM6KA option');
+    await expect(opcoes).toHaveText(['ACAO', 'FII', 'ETF', 'BDR', 'UNIT',
+                                     'RF', 'TESOURO']);
+  });
+
+  test('a classe que o programa sabe já vem escolhida', async ({ page }) => {
+    await abrir(page);
+    await expect(page.locator('#c-CDB726AM6KA')).toHaveValue('RF');
+    await expect(page.locator('#c-TESOURO-IPCA-JUROS-2037')).toHaveValue('TESOURO');
+    await expect(page.locator('#c-SNAG11')).toHaveValue('FII');
+  });
+
+  test('só o ambíguo é marcado para confirmação', async ({ page }) => {
+    await abrir(page);
+    await expect(page.locator('label[for="c-SNAG11"]')).toContainText('confirme a classe');
+    await expect(page.locator('label[for="c-CDB726AM6KA"]'))
+      .not.toContainText('confirme a classe');
+  });
+
+  test('gravar leva as classes escolhidas', async ({ page }) => {
+    await abrir(page);
+    await page.click('#btn-gravar');
+    await expect(page.locator('#toast')).toContainText('3 lançamento(s) gravado(s)');
+  });
+});
+
 test.describe('renda fixa', () => {
   test('aparece na carteira com PU e rendimento', async ({ page }) => {
     await destrancar(page);

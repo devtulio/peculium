@@ -573,8 +573,15 @@ def gravar(conn, conf: Conferencia, classes: dict[str, str] | None = None) -> in
     """Grava as linhas NOVAS conferidas. Devolve quantas entraram.
 
     `classes` sobrescreve a classe sugerida por ticker — é por onde a tela
-    devolve o que o usuário confirmou."""
+    devolve o que o usuário confirmou. **Só vale onde a confirmação foi
+    pedida**: um código que começa com CDB é renda fixa e ponto, e aceitar que a
+    tela diga o contrário já custou caro — uma lista de opções incompleta na
+    interface fez todo CDB e o Tesouro entrarem como ação, e a reconciliação da
+    renda fixa, que filtra por classe, parou de achar o lançamento da B3 e
+    duplicou os aportes. Um defeito de tela não pode corromper o razão."""
     classes = {k.upper(): v for k, v in (classes or {}).items()}
+    classes = {t: v for t, v in classes.items()
+               if conf.ativos_novos.get(t, {}).get("confirmar", True)}
     faltando = [t for t, a in conf.ativos_novos.items()
                 if not (classes.get(t) or a["classe"])]
     if faltando:

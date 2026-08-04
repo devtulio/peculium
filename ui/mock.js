@@ -53,14 +53,14 @@
 
   window.pywebview = {
     api: {
-      estado: () => ok({ versao: '0.9.2', existe: true, aberto: false,
+      estado: () => ok({ versao: '0.9.3', existe: true, aberto: false,
                          caminho: 'mock', preferencias: { tema: 'atrium' } }),
       abrir_cofre: senha => senha === 'mock'
-        ? ok({ config, versao: '0.9.2' })
+        ? ok({ config, versao: '0.9.3' })
         : erro('senha ou chave de recuperação incorreta'),
       criar_cofre: () => ok({ chave_recuperacao:
         'JHZT-KEE5-FZWP-6MGZ-HDPA-UDLF-YERR-DRUS-RD6N-SHOH-EGWO-XMNS-FHIQ' }),
-      abrir_com_recuperacao: () => ok({ config, versao: '0.9.2' }),
+      abrir_com_recuperacao: () => ok({ config, versao: '0.9.3' }),
       trocar_senha: () => ok({ aviso: 'Os backups anteriores continuam abrindo com a senha antiga.' }),
       fechar_cofre: () => ok({ fechado: true }),
       config: () => ok(config),
@@ -175,7 +175,29 @@
 
       // ?rf=1 devolve nota de renda fixa; ?posicao=1 devolve retrato da B3
       escolher_arquivo: () => ok('C:\\mock\\nota.pdf'),
-      importar: () => (new URLSearchParams(location.search).has('posicao') ? ok({
+      importar: () => (new URLSearchParams(location.search).has('b3') ? ok({
+        token: 'imp1', origem: 'B3', relatorio: 'MOVIMENTACAO',
+        novas: 3, duplicadas: 0, erros: 0,
+        avisos: ['O relatório de Negociação da B3 não traz corretagem.'],
+        instituicoes_novas: ['XP INVESTIMENTOS CCTVM S/A'],
+        // um de cada natureza: o que o programa sabe e o que ele pergunta
+        ativos_novos: {
+          CDB726AM6KA: { nome: 'CDB BANCO INTER', classe: 'RF', confirmar: false },
+          'TESOURO-IPCA-JUROS-2037': { nome: 'Tesouro IPCA+ 2037',
+                                       classe: 'TESOURO', confirmar: false },
+          SNAG11: { nome: 'SUNO AGRO', classe: 'FII', confirmar: true },
+        },
+        linhas: [
+          { n: 2, situacao: 'NOVA', tipo: 'COMPRA', data: '16/07/2026',
+            ticker: 'CDB726AM6KA', instituicao: 'XP', quantidade: 50000,
+            valor: 500, motivo: '' },
+          { n: 3, situacao: 'NOVA', tipo: 'COMPRA', data: '09/07/2026',
+            ticker: 'TESOURO-IPCA-JUROS-2037', instituicao: 'XP',
+            quantidade: 0.5, valor: 2079.13, motivo: '' },
+          { n: 4, situacao: 'NOVA', tipo: 'COMPRA', data: '23/04/2026',
+            ticker: 'SNAG11', instituicao: 'XP', quantidade: 10, valor: 107,
+            motivo: '' }],
+      }) : new URLSearchParams(location.search).has('posicao') ? ok({
         token: 'imp1', origem: 'POSICAO', data: '03/08/2026', confere: 1,
         avisos: ['CDB123ABC: a B3 não informou o indexador, então o título não '
                + 'foi cadastrado. O preço dela foi gravado e a posição fica correta.'],
@@ -232,7 +254,9 @@
             sentido: 'COMPRA', quantidade: 100, preco: 9.71, custos: 2.2 }],
       })),
       confirmar_importacao: () =>
-        (new URLSearchParams(location.search).has('posicao')
+        (new URLSearchParams(location.search).has('b3')
+          ? ok({ gravadas: 3 })
+          : new URLSearchParams(location.search).has('posicao')
           ? ok({ ativos_novos: 2, cotacoes: 4, titulos: 0, avisos: [] })
           : new URLSearchParams(location.search).has('rf')
           ? ok({ lancamentos: 2, titulos: 2, ja_importadas: 0 })
